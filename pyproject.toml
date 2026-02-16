@@ -7,7 +7,7 @@ name = "mac-messages-mcp"
 version = "0.7.3"
 description = "A bridge for interacting with macOS Messages app through MCP"
 readme = {file = "README.md", content-type = "text/markdown"}
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 authors = [
     {name = "Carter Lasalle", email = "carterlasalle@gmail.com"}
 ]

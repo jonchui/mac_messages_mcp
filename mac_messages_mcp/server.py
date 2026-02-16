@@ -5,6 +5,7 @@ Mac Messages MCP - Entry point fixed for proper MCP protocol implementation
 
 import asyncio
 import logging
+import os
 import sys
 
 from mcp.server.fastmcp import Context, FastMCP
@@ -259,10 +260,16 @@ def get_contact_messages_resource(contact: str, hours: int = 24) -> str:
     return get_recent_messages(hours=hours, contact=contact)
 
 def run_server():
-    """Run the MCP server with proper error handling"""
+    """Run the MCP server with proper error handling.
+    Set MCP_TRANSPORT=sse to serve over HTTP (default: stdio).
+    When using SSE, set FASTMCP_HOST (default 0.0.0.0) and FASTMCP_PORT (default 8000).
+    """
+    transport = os.environ.get("MCP_TRANSPORT", "stdio").lower()
+    if transport not in ("stdio", "sse"):
+        transport = "stdio"
     try:
-        logger.info("Starting Mac Messages MCP server...")
-        mcp.run()
+        logger.info("Starting Mac Messages MCP server (transport=%s)...", transport)
+        mcp.run(transport=transport)
     except Exception as e:
         logger.error(f"Failed to start server: {str(e)}")
         sys.exit(1)
