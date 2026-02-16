@@ -219,6 +219,35 @@ Use `--json` for raw JSON output.
 **Tools provided:** `tool_get_recent_messages`, `tool_send_message`, `tool_find_contact`, `tool_check_db_access`, `tool_check_contacts`, `tool_check_addressbook`, `tool_get_chats`, `tool_check_imessage_availability`, `tool_fuzzy_search_messages`.  
 **Resources:** `messages://recent/{hours}`, `messages://contact/{contact}/{hours}`.
 
+## Local "prod-like" workflow
+
+If your local machine is effectively production, use these helper scripts:
+
+```bash
+# Restart live service and verify endpoints
+./scripts/restart.sh
+
+# Full diagnostics (launchctl, listeners, endpoint probes, logs)
+./scripts/status.sh
+```
+
+You can also query deployment metadata directly:
+
+```bash
+curl http://<host>:8000/status
+```
+
+This returns JSON including the currently deployed commit hash and deploy timestamp.
+
+### Optional Git hook workflow
+
+You can configure local hooks so every commit restarts the live service:
+
+- `pre-commit`: blocks commit if unstaged or untracked files exist
+- `post-commit`: runs `./scripts/restart.sh`
+
+These hooks are local to your `.git/hooks` directory and are not shared automatically.
+
 ## Usage
 
 ### Smart Message Delivery
