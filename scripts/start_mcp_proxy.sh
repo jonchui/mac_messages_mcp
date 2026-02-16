@@ -52,15 +52,35 @@ if [ -z "$GIT_BIN" ] && [ -x /usr/bin/git ]; then
 fi
 branch="$("$GIT_BIN" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 commit="$("$GIT_BIN" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+commit_subject="$("$GIT_BIN" log -1 --pretty=%s 2>/dev/null || echo unknown)"
 if [ -n "$("$GIT_BIN" status --porcelain 2>/dev/null || true)" ]; then
   dirty="dirty"
 else
   dirty="clean"
 fi
 if [ "$commit" != "unknown" ] || [ ! -f "$REPO_DIR/.runtime/deployed.json" ]; then
-  cat > "$REPO_DIR/.runtime/deployed.json" <<EOF
-{"deployed_at":"$(date -u +"%Y-%m-%dT%H:%M:%SZ")","branch":"$branch","commit":"$commit","state":"$dirty","public_port":$PORT,"proxy_backend":"$BACKEND_HOST:$BACKEND_PORT"}
-EOF
+  DEPLOYED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+  BRANCH="$branch" \
+  COMMIT="$commit" \
+  COMMIT_SUBJECT="$commit_subject" \
+  STATE="$dirty" \
+  PUBLIC_PORT="$PORT" \
+  PROXY_BACKEND="$BACKEND_HOST:$BACKEND_PORT" \
+  python3 - <<'PY' > "$REPO_DIR/.runtime/deployed.json"
+import json
+import os
+
+payload = {
+    "deployed_at": os.environ.get("DEPLOYED_AT", "unknown"),
+    "branch": os.environ.get("BRANCH", "unknown"),
+    "commit": os.environ.get("COMMIT", "unknown"),
+    "commit_subject": os.environ.get("COMMIT_SUBJECT", "unknown"),
+    "state": os.environ.get("STATE", "unknown"),
+    "public_port": int(os.environ.get("PUBLIC_PORT", "0")),
+    "proxy_backend": os.environ.get("PROXY_BACKEND", "unknown"),
+}
+print(json.dumps(payload))
+PY
 fi
 
 CMD=(mcp-proxy --host "$BACKEND_HOST" --port "$BACKEND_PORT")

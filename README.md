@@ -238,15 +238,22 @@ curl http://<host>:8000/status
 ```
 
 This returns JSON including the currently deployed commit hash and deploy timestamp.
+It also includes the first line of the deployed commit message as `commit_subject`.
 
 ### Optional Git hook workflow
 
-You can configure local hooks so every commit restarts the live service:
+Tracked hooks live in `.githooks/` and can be installed with:
+
+```bash
+./scripts/install_hooks.sh
+```
+
+After installation, every commit can enforce and restart live service:
 
 - `pre-commit`: blocks commit if unstaged or untracked files exist
 - `post-commit`: runs `./scripts/restart.sh`
 
-These hooks are local to your `.git/hooks` directory and are not shared automatically.
+If you change hook behavior, edit `.githooks/*` and re-run `./scripts/install_hooks.sh`.
 
 ## Usage
 

@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+restart_script="$repo_root/scripts/restart.sh"
+
+if [ ! -x "$restart_script" ]; then
+  echo "⚠️  post-commit: $restart_script not found/executable; skipping restart."
+  exit 0
+fi
+
+echo "🔄 post-commit: restarting MCP service..."
+if ! "$restart_script"; then
+  echo "❌ post-commit: restart failed. Commit exists, but live service may be stale."
+  exit 1
+fi
+
+echo "✅ post-commit: service restarted."
+exit 0
