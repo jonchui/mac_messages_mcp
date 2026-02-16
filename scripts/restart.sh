@@ -22,6 +22,7 @@ if command -v git >/dev/null 2>&1; then
     cd "$REPO_DIR"
     branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
     sha="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    subject="$(git log -1 --pretty=%s 2>/dev/null || echo unknown)"
     if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
       dirty="dirty"
     else
@@ -29,9 +30,26 @@ if command -v git >/dev/null 2>&1; then
     fi
     echo "branch=$branch commit=$sha state=$dirty"
     mkdir -p .runtime
-    cat > .runtime/deployed.json <<EOF
-{"deployed_at":"$(date -u +"%Y-%m-%dT%H:%M:%SZ")","branch":"$branch","commit":"$sha","state":"$dirty","public_port":$PORT}
-EOF
+    DEPLOYED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+    BRANCH="$branch" \
+    COMMIT="$sha" \
+    COMMIT_SUBJECT="$subject" \
+    STATE="$dirty" \
+    PUBLIC_PORT="$PORT" \
+    python3 - <<'PY' > .runtime/deployed.json
+import json
+import os
+
+payload = {
+    "deployed_at": os.environ.get("DEPLOYED_AT", "unknown"),
+    "branch": os.environ.get("BRANCH", "unknown"),
+    "commit": os.environ.get("COMMIT", "unknown"),
+    "commit_subject": os.environ.get("COMMIT_SUBJECT", "unknown"),
+    "state": os.environ.get("STATE", "unknown"),
+    "public_port": int(os.environ.get("PUBLIC_PORT", "0")),
+}
+print(json.dumps(payload))
+PY
   )
 else
   echo "git not found"

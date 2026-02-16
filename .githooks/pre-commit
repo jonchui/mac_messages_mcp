@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Enforce "commit everything" policy:
+# - no unstaged tracked changes
+# - no untracked files
+
+if ! git diff --quiet --; then
+  echo "❌ Commit blocked: unstaged changes detected."
+  echo "Stage everything first (example: git add -A) so the commit matches production exactly."
+  exit 1
+fi
+
+if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+  echo "❌ Commit blocked: untracked files detected."
+  echo "Add or remove untracked files first (example: git add -A)."
+  exit 1
+fi
+
+exit 0
