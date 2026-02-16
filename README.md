@@ -19,7 +19,7 @@ A Python bridge for interacting with the macOS Messages app using MCP (Multiple 
 
 ### For Cursor Users
 
-[![Install MCP Server](https://cursor.com/deeplink/mcp-install-light.svg)](https://cursor.com/install-mcp?name=mac-messages-mcp&config=eyJjb21tYW5kIjoidXZ4IG1hYy1tZXNzYWdlcy1tY3AifQ%3D%3D)
+[![Install MCP Server](https://cursor.com/deeplink/mcp-install-light.svg)](https://cursor.com/en/install-mcp?name=mac-messages-mcp&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyJtYWMtbWVzc2FnZXMtbWNwIl19)
 
 *Click the button above to automatically add Mac Messages MCP to Cursor*
 
@@ -91,7 +91,7 @@ To grant Full Disk Access:
 
 #### Option 1: One-Click Install (Recommended)
 
-[![Install MCP Server](https://cursor.com/deeplink/mcp-install-light.svg)](https://cursor.com/install-mcp?name=mac-messages-mcp&config=eyJjb21tYW5kIjoidXZ4IG1hYy1tZXNzYWdlcy1tY3AifQ%3D%3D)
+[![Install MCP Server](https://cursor.com/deeplink/mcp-install-light.svg)](https://cursor.com/en/install-mcp?name=mac-messages-mcp&config=eyJjb21tYW5kIjoidXZ4IiwiYXJncyI6WyJtYWMtbWVzc2FnZXMtbWNwIl19)
 
 #### Option 2: Manual Setup
 
@@ -103,25 +103,57 @@ uvx mac-messages-mcp
 
 ⚠️ Only run one instance of the MCP server (either on Cursor or Claude Desktop), not both
 
+### Remote MCP clients (HTTP/SSE)
+
+To access the server from a remote MCP client (another machine, Docker, or Cursor using a URL), run it over HTTP with SSE:
+
+```bash
+# From the project directory (requires uv)
+export PATH="$HOME/.local/bin:$PATH"
+cd /path/to/mac_messages_mcp
+MCP_TRANSPORT=sse FASTMCP_HOST=0.0.0.0 FASTMCP_PORT=8000 uv run python -m mac_messages_mcp.server
+```
+
+Or use the script:
+
+```bash
+./scripts/run_http.sh
+```
+
+Then point your remote client at:
+
+- **Same machine:** `http://localhost:8000` (SSE endpoint: `/sse`)
+- **Other machine on LAN:** `http://<this-mac-ip>:8000` (replace with your Mac’s IP)
+
+Override host/port with `FASTMCP_HOST` and `FASTMCP_PORT` if needed. Binding to `0.0.0.0` exposes the service on all interfaces; use `127.0.0.1` for local-only access.
+
 ### Docker Container Integration
 
-If you need to connect to `mac-messages-mcp` from a Docker container, you'll need to use the `mcp-proxy` package to bridge the stdio-based server to HTTP.
+If you need to connect to `mac-messages-mcp` from a Docker container, you can either run the server with `MCP_TRANSPORT=sse` as above and use `http://host.docker.internal:8000`, or use the `mcp-proxy` package to bridge the stdio-based server to HTTP.
 
 #### Setup Instructions
 
-1. **Install mcp-proxy on your macOS host:**
-```bash
-npm install -g mcp-proxy
-```
+1. **Install Node.js (for `npx`) on your macOS host** if needed (npx comes with Node):
+   ```bash
+   # Option A: via nvm (no admin required)
+   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+   # then open a new terminal or: source ~/.nvm/nvm.sh
+   nvm install --lts
+   ```
+   Or install from [nodejs.org](https://nodejs.org) or use Homebrew: `brew install node`.
 
 2. **Start the proxy server:**
 ```bash
-# Using the published version
-npx mcp-proxy uvx mac-messages-mcp --port 8000 --host 0.0.0.0
+# Recommended (local source checkout)
+npx mcp-proxy --host 0.0.0.0 --port 8000 -- uv run python -m mac_messages_mcp.server
 
-# Or using local development (if you encounter issues)
-npx mcp-proxy uv run python -m mac_messages_mcp.server --port 8000 --host 0.0.0.0
+# If you installed mcp-proxy globally:
+mcp-proxy --host 0.0.0.0 --port 8000 -- uv run python -m mac_messages_mcp.server
 ```
+
+> Note: `uvx mac-messages-mcp` may currently fail due to a published package/sdk
+> mismatch (`FastMCP.__init__() got an unexpected keyword argument 'description'`).
+> Use the local `uv run python -m mac_messages_mcp.server` command above until a new release is published.
 
 3. **Connect from Docker:**
 Your Docker container can now connect to:
@@ -143,10 +175,10 @@ services:
 5. **Running multiple MCP servers:**
 ```bash
 # Terminal 1 - Messages MCP on port 8001
-npx mcp-proxy uvx mac-messages-mcp --port 8001 --host 0.0.0.0
+npx mcp-proxy --host 0.0.0.0 --port 8001 -- uv run python -m mac_messages_mcp.server
 
 # Terminal 2 - Another MCP server on port 8002
-npx mcp-proxy uvx another-mcp-server --port 8002 --host 0.0.0.0
+npx mcp-proxy --host 0.0.0.0 --port 8002 -- uvx another-mcp-server
 ```
 
 **Note:** Binding to `0.0.0.0` exposes the service to all network interfaces. In production, consider using more restrictive host bindings and adding authentication.
@@ -169,6 +201,23 @@ cd mac_messages_mcp
 uv install -e .
 ```
 
+
+## Testing and listing tools
+
+To see what tools (skills) the server exposes and confirm it’s working:
+
+```bash
+# List tools by spawning the server via stdio (no HTTP server needed)
+uv run python scripts/list_tools.py
+
+# If the server is already running over HTTP (e.g. on port 8000)
+uv run python scripts/list_tools.py --url http://localhost:8000/sse
+```
+
+Use `--json` for raw JSON output.
+
+**Tools provided:** `tool_get_recent_messages`, `tool_send_message`, `tool_find_contact`, `tool_check_db_access`, `tool_check_contacts`, `tool_check_addressbook`, `tool_get_chats`, `tool_check_imessage_availability`, `tool_fuzzy_search_messages`.  
+**Resources:** `messages://recent/{hours}`, `messages://contact/{contact}/{hours}`.
 
 ## Usage
 
