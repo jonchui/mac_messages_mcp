@@ -5,6 +5,9 @@ set -euo pipefail
 # - no unstaged tracked changes
 # - no untracked files
 
+repo_root="$(git rev-parse --show-toplevel)"
+template_path="deploy/launchagents/com.jonchui.mac-messages-mcp.plist.template"
+
 if ! git diff --quiet --; then
   echo "❌ Commit blocked: unstaged changes detected."
   echo "Stage everything first (example: git add -A) so the commit matches production exactly."
@@ -15,6 +18,12 @@ if [ -n "$(git ls-files --others --exclude-standard)" ]; then
   echo "❌ Commit blocked: untracked files detected."
   echo "Add or remove untracked files first (example: git add -A)."
   exit 1
+fi
+
+# Keep local LaunchAgent in sync whenever the tracked template is changed.
+if git diff --cached --name-only -- | grep -qx "$template_path"; then
+  echo "🔧 pre-commit: LaunchAgent template changed; syncing local LaunchAgent..."
+  "$repo_root/scripts/sync_launchagent.sh"
 fi
 
 exit 0
