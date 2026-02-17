@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import datetime as dt
+import hashlib
 import json
 from pathlib import Path
 from typing import Iterable
@@ -61,6 +63,55 @@ def apply_api_key_fallback(headers: dict[str, str]) -> dict[str, str]:
     return headers
 
 
+def sanitize_header_value(key: str, value: str) -> str:
+    lower_key = key.lower()
+    if lower_key == "x-api-key":
+        return "[REDACTED]"
+    if lower_key == "authorization":
+        if value.lower().startswith("bearer "):
+            token = value[7:]
+            fingerprint = hashlib.sha256(token.encode("utf-8")).hexdigest()[:12]
+            return f"Bearer [REDACTED:{fingerprint}]"
+        return "[REDACTED]"
+    return value[:200] + ("..." if len(value) > 200 else "")
+
+
+def extract_jsonrpc_method(body: bytes) -> str | None:
+    if not body:
+        return None
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except Exception:
+        return None
+    if isinstance(payload, dict):
+        method = payload.get("method")
+        if isinstance(method, str):
+            return method
+    return None
+
+
+def log_gateway_request(
+    request: Request,
+    req_headers: dict[str, str],
+    body: bytes,
+    upstream_status: int,
+) -> None:
+    sanitized_headers = {k: sanitize_header_value(k, v) for k, v in req_headers.items()}
+    client_ip = request.client.host if request.client else "unknown"
+    event = {
+        "event": "gateway_request",
+        "ts": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "client_ip": client_ip,
+        "method": request.method,
+        "path": request.url.path,
+        "query": request.url.query,
+        "status": upstream_status,
+        "jsonrpc_method": extract_jsonrpc_method(body),
+        "headers": sanitized_headers,
+    }
+    print(json.dumps(event, ensure_ascii=True), flush=True)
+
+
 def load_deploy_info(path: Path) -> dict:
     if not path.exists():
         return {"status": "unknown", "message": "deploy metadata not found"}
@@ -92,6 +143,7 @@ def create_app(target_base: str, deploy_info_path: Path) -> Starlette:
             content=body if body else None,
         )
         upstream = await client.send(outbound, stream=True)
+        log_gateway_request(request, req_headers, body, upstream.status_code)
 
         resp_headers = filter_headers(upstream.headers.items())
         return StreamingResponse(
