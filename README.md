@@ -299,6 +299,27 @@ security find-generic-password -a "$USER" -s "mac-messages-mcp/api-key" -w
 
 If run via SSH, the login keychain must be unlocked for that user session.
 
+### Optional app-wrapper launch (for Full Disk Access)
+
+If macOS Full Disk Access is easier to grant to an app than a Python binary, install:
+
+```bash
+./scripts/install_macmessages_app.sh
+```
+
+This creates:
+
+```bash
+~/Applications/MacMessagesMCP.app
+```
+
+Then add `MacMessagesMCP.app` to **Privacy & Security -> Full Disk Access**, run:
+
+```bash
+./scripts/sync_launchagent.sh
+./scripts/restart.sh
+```
+
 ### API key auth smoke test (redacted)
 
 ```bash
