@@ -17,6 +17,7 @@ from mac_messages_mcp.messages import (
     fuzzy_search_messages,
     get_cached_contacts,
     get_recent_messages,
+    get_unread_messages,
     query_messages_db,
     send_message,
 )
@@ -217,6 +218,23 @@ def tool_check_imessage_availability(ctx: Context, recipient: str) -> str:
     except Exception as e:
         logger.error(f"Error checking iMessage availability: {str(e)}")
         return f"Error checking iMessage availability: {str(e)}"
+
+@mcp.tool()
+def tool_get_unread_messages(ctx: Context, limit: int = 50) -> str:
+    """
+    Get unread incoming messages, if the Messages database exposes read status.
+    On some macOS versions this is not available; then use tool_get_recent_messages instead.
+
+    Args:
+        limit: Maximum number of unread messages to return (default 50).
+    """
+    logger.info(f"Getting unread messages (limit={limit})")
+    try:
+        return get_unread_messages(limit=limit)
+    except Exception as e:
+        logger.error(f"Error in get_unread_messages: {str(e)}")
+        return f"Error getting unread messages: {str(e)}"
+
 
 @mcp.tool()
 def tool_fuzzy_search_messages(

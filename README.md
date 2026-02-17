@@ -117,10 +117,10 @@ npm install -g mcp-proxy
 2. **Start the proxy server:**
 ```bash
 # Using the published version
-npx mcp-proxy uvx mac-messages-mcp --port 8000 --host 0.0.0.0
+npx mcp-proxy --port 8000 -- uvx mac-messages-mcp
 
 # Or using local development (if you encounter issues)
-npx mcp-proxy uv run python -m mac_messages_mcp.server --port 8000 --host 0.0.0.0
+npx mcp-proxy --port 8000 -- uv run python -m mac_messages_mcp.server
 ```
 
 3. **Connect from Docker:**
@@ -143,20 +143,115 @@ services:
 5. **Running multiple MCP servers:**
 ```bash
 # Terminal 1 - Messages MCP on port 8001
-npx mcp-proxy uvx mac-messages-mcp --port 8001 --host 0.0.0.0
+npx mcp-proxy --port 8001 -- uvx mac-messages-mcp
 
 # Terminal 2 - Another MCP server on port 8002
-npx mcp-proxy uvx another-mcp-server --port 8002 --host 0.0.0.0
+npx mcp-proxy --port 8002 -- uvx another-mcp-server
 ```
 
 **Note:** Binding to `0.0.0.0` exposes the service to all network interfaces. In production, consider using more restrictive host bindings and adding authentication.
 
+### Run locally for remote/WAN clients (e.g. Poke.com)
+
+To use your Mac Messages MCP from the internet (Poke.com, other browsers, or apps that need an HTTP MCP URL), run the server on your Mac and expose it over HTTP, then make that URL reachable from the WAN.
+
+**1. Install and run the HTTP proxy (on your Mac)**
+
+From this repo (after `uv venv` and `uv pip install -e .`):
+
+```bash
+npm install -g mcp-proxy
+npx mcp-proxy --port 8000 -- uv run python -m mac_messages_mcp.server
+```
+
+Or use the helper script (from repo root):
+
+```bash
+./scripts/run-http-proxy.sh
+```
+
+The proxy exposes:
+- **Streamable HTTP:** `http://<your-host>:8000/mcp`
+- **SSE:** `http://<your-host>:8000/sse`
+
+**2. Expose to the internet**
+
+- **Option A – Built-in tunnel (easiest):** mcp-proxy can create a public HTTPS URL for you. Run:
+  ```bash
+  npx mcp-proxy --port 8000 --tunnel -- uv run python -m mac_messages_mcp.server
+  ```
+  It will print a URL like `https://xxxxx.tunnel.gla.ma`. Use that as the base for Poke.com (e.g. `https://xxxxx.tunnel.gla.ma/sse`).
+
+- **Option B – External tunnel (ngrok, etc.):** Use [ngrok](https://ngrok.com) or [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/). Start the proxy as in step 1, then in another terminal:
+  ```bash
+  ngrok http 8000
+  ```
+  Use the HTTPS URL ngrok gives you (e.g. `https://abc123.ngrok.io/sse`).
+
+- **Option C – Port forward:** In your router, forward TCP port 8000 to your Mac’s LAN IP. Use your public IP or a DynDNS hostname.
+
+**3. Connect from Poke.com (or other clients)**
+
+- In [Poke.com Settings → Connections](https://poke.com/settings/connections), add an MCP server.
+- **URL:** your public base URL + the path:
+  - `https://<your-ngrok-or-host>/sse` (SSE), or  
+  - `https://<your-ngrok-or-host>/mcp` (streamable HTTP)
+
+Example: if ngrok shows `https://abc123.ngrok-free.app`, use `https://abc123.ngrok-free.app/sse`.
+
+**Security:** Your Messages DB is only on your Mac; the proxy just forwards MCP over HTTP. Restrict who can reach the proxy (tunnel auth, firewall, or VPN) and prefer HTTPS (ngrok/tunnel) over plain port forwarding.
+
+**4. Testing with Poke.com**
+
+Poke only sees your chat; it doesn’t know to use your MCP connection unless you ask it to. **Name your connection** in Poke (e.g. “Mac Messages” or “Messages”) and then ask explicitly to use that connection’s tools.
+
+**Example prompts that work:**
+
+- *“Use my Mac Messages connection and run the tool to get my recent messages from the last 24 hours.”*
+- *“Call the get recent messages tool from my Messages integration with hours=24.”*
+- *“Using the Mac Messages connection: list my last 48 hours of iMessages.”*
+- *“Use the Messages integration to search my messages for ‘dinner’ in the last 24 hours.”*
+- *“With my Mac Messages connection, check if +1234567890 has iMessage.”*
+- *“Send a message to [contact] saying ‘Hello’ using my Messages connection.”*
+
+**Tools this server exposes (use these names when asking Poke):**
+
+| Tool | What it does |
+|------|----------------|
+| `tool_get_recent_messages` | Get recent messages (params: `hours`, optional `contact`) |
+| `tool_send_message` | Send a message (params: `recipient`, `message`, optional `group_chat`) |
+| `tool_find_contact` | Find contact by name |
+| `tool_fuzzy_search_messages` | Search message content (params: `search_term`, `hours`, `threshold`) |
+| `tool_get_chats` | List group chats |
+| `tool_check_imessage_availability` | Check if a number has iMessage |
+| `tool_check_db_access` | Diagnose Messages DB access (useful if “no messages” or errors) |
+| `tool_check_contacts` / `tool_check_addressbook` | List/diagnose contacts |
+
+If Poke still says it can’t access messages, say: *“Use the [your connection name] integration’s tool_get_recent_messages tool with hours=24.”* If it still fails, run `tool_check_db_access` and ensure your Mac has given **Full Disk Access** to the app running the MCP server (Terminal or the process that runs `mcp-proxy`).
+
+**Poke says “I don’t have access to that tool” or “I can’t see the tools”**
+
+1. **Confirm your server exposes tools** – Use [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) with the **exact same URL and auth** you use in Poke:
+   - Run: `npx @modelcontextprotocol/inspector`
+   - In the UI: choose **streamable-http**, enter your MCP URL (e.g. `https://your-tunnel.or.host/sse` or `http://localhost:8000/sse`).
+   - If you use a Bearer token in Poke, add it in Inspector (e.g. custom header `Authorization: Bearer YOUR_TOKEN` or the auth option Inspector offers).
+   - Connect and open the **Tools** tab. You should see `tool_get_recent_messages`, `tool_send_message`, etc. Try calling `tool_get_recent_messages` with `hours: 24`.
+   - **If Inspector lists and runs tools** → Your server and URL are fine; the problem is how Poke discovers or uses that connection. Try: refresh the connection in Poke (Settings → Connections → your integration → Refresh), start a **new** conversation, and ask e.g. *“Using my [integration name] connection, get my last 24 hours of messages.”* If it still never uses the tool, it may be a Poke limitation with custom MCP integrations.
+   - **If Inspector does not list tools or connection fails** → Fix the server/proxy side: ensure the MCP proxy is running, the URL ends with `/sse` (or `/mcp`), and if you use auth, start the proxy with the same secret (e.g. `npx mcp-proxy --port 8000 --apiKey "YOUR_TOKEN" -- uv run python -m mac_messages_mcp.server`) and use that token in Poke’s API Key / auth field so Poke and the proxy match.
+
+2. **Auth mismatch** – If Poke uses “Bearer token”, the proxy may expect an API key. Start the proxy with `--apiKey "your-secret"` and in Poke use the same value in the API Key field (if Poke sends it as `X-API-Key`) or ensure Poke sends the same token the proxy is configured to accept.
 
 ### Option 1: Install from PyPI
 
+`uv` requires an active virtual environment (or `--system`). Create one, then install:
+
 ```bash
+uv venv
+source .venv/bin/activate   # On Windows: .venv\Scripts\activate
 uv pip install mac-messages-mcp
 ```
+
+To install into the system Python instead: `uv pip install --system mac-messages-mcp`
 
 ### Option 2: Install from source
 
@@ -165,9 +260,59 @@ uv pip install mac-messages-mcp
 git clone https://github.com/carterlasalle/mac_messages_mcp.git
 cd mac_messages_mcp
 
-# Install dependencies
-uv install -e .
+# Create a venv and install in editable mode
+uv venv
+uv pip install -e .
 ```
+
+Then run with `uv run mac-messages-mcp` or `source .venv/bin/activate` and `mac-messages-mcp`.
+
+
+## Testing the server locally (sample MCP queries)
+
+To confirm the server and tools work **independent of Poke or other clients**, use one of these:
+
+### 1. Sample MCP client script (repo)
+
+From the repo (with proxy already running **without** `--apiKey` for a quick local test):
+
+```bash
+# Terminal 1: start proxy (no auth)
+npx mcp-proxy --port 8000 -- uv run python -m mac_messages_mcp.server
+
+# Terminal 2: run the test client
+uv run python scripts/test_mcp_client.py http://localhost:8000/sse
+```
+
+The script lists tools and calls `tool_check_db_access` and `tool_get_recent_messages(hours=24)`. If the proxy uses API key auth, pass it:  
+`uv run python scripts/test_mcp_client.py http://localhost:8000/sse --header "X-API-Key: YOUR_TOKEN"`.
+
+### 2. Cursor
+
+In **Cursor Settings → MCP**, add a server with command:
+
+```text
+uvx mac-messages-mcp
+```
+
+Or from the repo: `uv run mac-messages-mcp` (with “Execute in project directory” or run from the repo root). Then in a chat, ask e.g. “Use the Messages MCP to get my last 24 hours of messages.” Cursor will call the tools.
+
+### 3. Claude Desktop
+
+In **Claude → Settings → Developer → Edit Config**, add:
+
+```json
+"mcpServers": {
+  "messages": {
+    "command": "uvx",
+    "args": ["mac-messages-mcp"]
+  }
+}
+```
+
+Restart Claude, then ask Claude to get your recent messages or send a message via the Messages integration.
+
+If the script and Cursor/Claude all work but Poke does not, the issue is with how Poke invokes tools for custom MCP connections, not with this server.
 
 
 ## Usage
