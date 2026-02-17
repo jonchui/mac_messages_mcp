@@ -870,6 +870,70 @@ def get_recent_messages(hours: int = 24, contact: Optional[str] = None) -> str:
 get_recent_messages.recent_matches = []
 
 
+def get_unread_messages(limit: int = 50) -> str:
+    """
+    Get unread incoming messages from the Messages app, if the database exposes read status.
+    Uses the date_read column when present (NULL = unread). If your macOS version does not
+    expose this column, returns a short message suggesting get_recent_messages instead.
+    """
+    # Query: incoming messages (is_from_me = 0) where date_read IS NULL, newest first
+    query = """
+    SELECT
+        m.ROWID,
+        m.date,
+        m.text,
+        m.attributedBody,
+        m.is_from_me,
+        m.handle_id,
+        m.cache_roomnames
+    FROM message m
+    WHERE m.is_from_me = 0 AND m.date_read IS NULL
+    ORDER BY m.date DESC
+    LIMIT ?
+    """
+    try:
+        messages = query_messages_db(query, (limit,))
+    except Exception:
+        messages = [{"error": "unknown"}]
+
+    if not messages:
+        return "No unread messages."
+
+    if "error" in messages[0]:
+        err = messages[0]["error"].lower()
+        if "date_read" in err or "no such column" in err:
+            return (
+                "Unread status is not available in this Messages database. "
+                "Use get_recent_messages (e.g. last 24 hours) to see your latest messages."
+            )
+        return f"Error accessing messages: {messages[0]['error']}"
+
+    chat_mapping = get_chat_mapping()
+    formatted = []
+    for msg in messages:
+        body = msg.get("text") or extract_body_from_attributed(msg.get("attributedBody"))
+        if not body or not body.strip():
+            continue
+        try:
+            apple_epoch_ns = 978307200 * 1_000_000_000
+            ts = int(msg["date"])
+            ns = ts if len(str(ts)) > 10 else ts * 1_000_000_000
+            sec = ns / 1_000_000_000.0 + 978307200
+            date_str = datetime.fromtimestamp(sec, tz=timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+        except (ValueError, TypeError, OverflowError):
+            date_str = "Unknown date"
+        direction = get_contact_name(msg["handle_id"])
+        group_name = chat_mapping.get(msg.get("cache_roomnames")) if msg.get("cache_roomnames") else None
+        prefix = f"[{date_str}]"
+        if group_name:
+            prefix += f" [{group_name}]"
+        formatted.append(f"{prefix} {direction}: {body}")
+
+    if not formatted:
+        return "No unread messages with readable content."
+    return "\n".join(formatted)
+
+
 def fuzzy_search_messages(
     search_term: str,
     hours: int = 24,
