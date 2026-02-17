@@ -271,6 +271,52 @@ To sync the template into your local `~/Library/LaunchAgents` file:
 
 `pre-commit` automatically runs this sync **only when the template file is included in the commit**.
 
+### API key storage (no secrets in git)
+
+Do not put live API keys in tracked files. This repo keeps `MCP_PROXY_API_KEY` empty in the template.
+
+Store the real key in macOS Keychain instead:
+
+```bash
+./scripts/set_api_key.sh "sk-..."
+```
+
+At startup, `scripts/start_mcp_proxy.sh` loads `MCP_PROXY_API_KEY` from env first, then falls back to Keychain service `mac-messages-mcp/api-key` for account `$USER`.
+
+Set/rotate key locally (or over SSH):
+
+```bash
+./scripts/set_api_key.sh "sk-..."
+# or remotely
+ssh <user>@<mac-mini-host> 'cd "/Users/jonchui/Library/Mobile Documents/com~apple~CloudDocs/code/mac_messages_mcp" && ./scripts/set_api_key.sh "sk-..."'
+```
+
+Read current key from Keychain (same user account):
+
+```bash
+security find-generic-password -a "$USER" -s "mac-messages-mcp/api-key" -w
+```
+
+If run via SSH, the login keychain must be unlocked for that user session.
+
+### API key auth smoke test (redacted)
+
+```bash
+# Valid key -> 200 OK and SSE stream
+curl -i -H "X-API-Key: [REDACTED]" http://76.155.10.223:8000/sse
+HTTP/1.1 200 OK
+content-type: text/event-stream
+event: endpoint
+data: /messages?sessionId=<...>
+event: message
+data: {"jsonrpc":"2.0","method":"notifications/message","params":{"data":"SSE Connection established","level":"info"}}
+
+# Invalid/truncated key -> 401 Unauthorized
+curl -i -H "X-API-Key: [REDACTED]" http://76.155.10.223:8000/sse
+HTTP/1.1 401 Unauthorized
+{"error":{"code":401,"message":"Unauthorized: Invalid or missing API key"},"id":null,"jsonrpc":"2.0"}
+```
+
 ## Usage
 
 ### Smart Message Delivery
