@@ -40,6 +40,27 @@ def filter_headers(headers: Iterable[tuple[str, str]]) -> dict[str, str]:
     return {k: v for k, v in headers if k.lower() not in HOP_BY_HOP_HEADERS}
 
 
+def apply_api_key_fallback(headers: dict[str, str]) -> dict[str, str]:
+    """
+    Allow clients that send Authorization: Bearer <token> by forwarding that
+    token as X-API-Key when X-API-Key is not already present.
+    """
+    has_api_key = any(k.lower() == "x-api-key" for k in headers)
+    if has_api_key:
+        return headers
+
+    auth_value = next((v for k, v in headers.items() if k.lower() == "authorization"), "")
+    if not auth_value.lower().startswith("bearer "):
+        return headers
+
+    token = auth_value[7:].strip()
+    if not token:
+        return headers
+
+    headers["X-API-Key"] = token
+    return headers
+
+
 def load_deploy_info(path: Path) -> dict:
     if not path.exists():
         return {"status": "unknown", "message": "deploy metadata not found"}
@@ -61,6 +82,7 @@ def create_app(target_base: str, deploy_info_path: Path) -> Starlette:
             target_url = f"{target_url}?{request.url.query}"
 
         req_headers = filter_headers(request.headers.items())
+        req_headers = apply_api_key_fallback(req_headers)
         body = await request.body()
 
         outbound = client.build_request(
