@@ -6,13 +6,19 @@ PORT="${1:-8000}"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 API_KEY="${MCP_PROXY_API_KEY:-}"
+PLIST_PATH="$HOME/Library/LaunchAgents/$LABEL.plist"
 
 echo "Stopping stale MCP processes (if any)..."
 pkill -f "mcp-proxy" 2>/dev/null || true
 pkill -f "uv run python -m mac_messages_mcp.server" 2>/dev/null || true
 
 echo "Restarting LaunchAgent: $LABEL"
-launchctl kickstart -k "gui/$(id -u)/$LABEL"
+if [ -f "$PLIST_PATH" ]; then
+  launchctl unload -w "$PLIST_PATH" >/dev/null 2>&1 || true
+  launchctl load -w "$PLIST_PATH"
+else
+  launchctl kickstart -k "gui/$(id -u)/$LABEL"
+fi
 sleep 2
 
 echo

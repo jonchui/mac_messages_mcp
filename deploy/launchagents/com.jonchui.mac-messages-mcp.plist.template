@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.jonchui.mac-messages-mcp</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>/Users/jonchui/bin/start_mcp_proxy.sh</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/jonchui/Library/Mobile Documents/com~apple~CloudDocs/code/mac_messages_mcp</string>
+
+  <key>StandardOutPath</key>
+  <string>/Users/jonchui/Library/Logs/mac-messages-mcp.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/jonchui/Library/Logs/mac-messages-mcp.err.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>MCP_PROXY_HOST</key>
+    <string>0.0.0.0</string>
+    <key>MCP_PROXY_PORT</key>
+    <string>8000</string>
+    <key>MCP_PROXY_SERVER_MODE</key>
+    <string>both</string>
+    <key>MCP_PROXY_TUNNEL</key>
+    <string>1</string>
+    <key>MCP_PROXY_API_KEY</key>
+    <string></string>
+  </dict>
+</dict>
+</plist>

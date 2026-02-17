@@ -255,6 +255,22 @@ After installation, every commit can enforce and restart live service:
 
 If you change hook behavior, edit `.githooks/*` and re-run `./scripts/install_hooks.sh`.
 
+### LaunchAgent template (tracked)
+
+The LaunchAgent config is tracked as a template at:
+
+```bash
+deploy/launchagents/com.jonchui.mac-messages-mcp.plist.template
+```
+
+To sync the template into your local `~/Library/LaunchAgents` file:
+
+```bash
+./scripts/sync_launchagent.sh
+```
+
+`pre-commit` automatically runs this sync **only when the template file is included in the commit**.
+
 ## Usage
 
 ### Smart Message Delivery
