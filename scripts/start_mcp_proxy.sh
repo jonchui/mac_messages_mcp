@@ -21,9 +21,15 @@ BACKEND_PORT="${MCP_PROXY_BACKEND_PORT:-8001}"
 USE_TUNNEL="${MCP_PROXY_TUNNEL:-1}"
 TUNNEL_SUBDOMAIN="${MCP_PROXY_TUNNEL_SUBDOMAIN:-}"
 
-# Optional API key. If empty, proxy runs without auth.
+# Optional API key from env. If empty, try macOS Keychain.
 API_KEY="${MCP_PROXY_API_KEY:-}"
+KEYCHAIN_SERVICE="${MCP_PROXY_API_KEY_KEYCHAIN_SERVICE:-mac-messages-mcp/api-key}"
+KEYCHAIN_ACCOUNT="${MCP_PROXY_API_KEY_KEYCHAIN_ACCOUNT:-$USER}"
 REPLACE_EXISTING="${MCP_PROXY_REPLACE_EXISTING:-0}"
+
+if [ -z "$API_KEY" ] && command -v security >/dev/null 2>&1; then
+  API_KEY="$(security find-generic-password -a "$KEYCHAIN_ACCOUNT" -s "$KEYCHAIN_SERVICE" -w 2>/dev/null || true)"
+fi
 
 # If something is already bound to this port, either replace it (opt-in)
 # or exit cleanly to avoid duplicate-process churn.
