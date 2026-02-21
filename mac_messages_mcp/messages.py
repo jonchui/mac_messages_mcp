@@ -514,8 +514,13 @@ def send_message(recipient: str, message: str, group_chat: bool = False) -> str:
     
     # Check if recipient is directly a phone number
     if all(c.isdigit() or c in '+- ()' for c in recipient):
-        # Clean the phone number
         clean_number = normalize_phone_number(recipient)
+        # Reject truncated numbers (e.g. "714" from "714-376-7892") — require full number
+        if len(clean_number) < 10:
+            return (
+                f"Error: Phone number too short ({len(clean_number)} digits). "
+                "Use the full number (e.g. 714-376-7892 or 7143767892), not just the area code."
+            )
         return _send_message_to_recipient(clean_number, message, group_chat=False)
 
     # Check if recipient is an email address
@@ -552,6 +557,12 @@ def _send_message_to_recipient(recipient: str, message: str, contact_name: str =
     if not group_chat:
         # Phone numbers: avoid "Not Delivered" by sending via SMS when recipient has no iMessage
         if recipient and all(c.isdigit() or c in '+- ()' for c in recipient):
+            digits_only = normalize_phone_number(recipient)
+            if len(digits_only) < 10:
+                return (
+                    f"Error: Phone number too short ({len(digits_only)} digits). "
+                    "Use the full number (e.g. 714-376-7892), not just the area code."
+                )
             try:
                 has_imessage = _check_imessage_availability(recipient)
                 if has_imessage:
