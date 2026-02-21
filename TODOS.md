@@ -4,6 +4,7 @@ This file tracks operational and deployment tasks in a format that can be copied
 
 ## Immediate
 
+- [ ] Investigate intermittent `500 Internal Server Error` seen from WAN clients after app-wrapper LaunchAgent switch; capture failing `gateway_request` lines and confirm backend health during incidents.
 - [ ] Verify poke.com transport mode and lock server mode to one endpoint (`/mcp` stream or `/sse` SSE).
 - [ ] Re-enable API key auth after poke transport is confirmed, then re-test from WAN and LAN.
 - [ ] Add one canonical "poke setup" section to `README.md` with exact URL, transport, and header fields.
