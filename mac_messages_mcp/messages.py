@@ -545,50 +545,40 @@ send_message.recent_matches = []
 
 def _send_message_to_recipient(recipient: str, message: str, contact_name: str = None, group_chat: bool = False) -> str:
     """
-    Internal function to send a message to a specific recipient using file-based approach.
-    
-    Args:
-        recipient: Phone number or email
-        message: Message text to send
-        contact_name: Optional contact name for the success message
-        group_chat: Whether this is a group chat
-    
-    Returns:
-        Success or error message
+    Internal function to send a message to a specific recipient.
+    For individual messages: if recipient has no iMessage (e.g. Android), send via SMS first;
+    otherwise use direct method (iMessage with SMS fallback on error).
     """
+    if not group_chat:
+        # Phone numbers: avoid "Not Delivered" by sending via SMS when recipient has no iMessage
+        if recipient and all(c.isdigit() or c in '+- ()' for c in recipient):
+            try:
+                has_imessage = _check_imessage_availability(recipient)
+                if has_imessage:
+                    return _send_message_direct(recipient, message, contact_name, group_chat=False)
+                else:
+                    return _send_message_sms(recipient, message, contact_name)
+            except Exception as e:
+                return _imessage_check_error_message(e, recipient)
+        return _send_message_direct(recipient, message, contact_name, group_chat=False)
+
+    # Group chats: file-based send to chat ID
     try:
-        # Create a temporary file with the message content
         file_path = os.path.abspath('imessage_tmp.txt')
-        
         with open(file_path, 'w') as f:
             f.write(message)
-        
-        # Adjust the AppleScript command based on whether this is a group chat
-        if not group_chat:
-            command = f'tell application "Messages" to send (read (POSIX file "{file_path}") as «class utf8») to participant "{recipient}" of (1st service whose service type = iMessage)'
-        else:
-            command = f'tell application "Messages" to send (read (POSIX file "{file_path}") as «class utf8») to chat "{recipient}"'
-        
-        # Run the AppleScript
+        command = f'tell application "Messages" to send (read (POSIX file "{file_path}") as «class utf8») to chat "{recipient}"'
         result = run_applescript(command)
-        
-        # Clean up the temporary file
         try:
             os.remove(file_path)
-        except:
+        except Exception:
             pass
-        
-        # Check result
         if result.startswith("Error:"):
-            # Try fallback to direct method
-            return _send_message_direct(recipient, message, contact_name, group_chat)
-        
-        # Message sent successfully
+            return _send_message_direct(recipient, message, contact_name, group_chat=True)
         display_name = contact_name if contact_name else recipient
         return f"Message sent successfully to {display_name}"
-    except Exception as e:
-        # Try fallback method
-        return _send_message_direct(recipient, message, contact_name, group_chat)
+    except Exception:
+        return _send_message_direct(recipient, message, contact_name, group_chat=True)
 
 def get_contact_name(handle_id: int) -> str:
     """
@@ -1130,12 +1120,33 @@ def _check_imessage_availability(recipient: str) -> bool:
         text_count = row.get('text_count', 0)
         num_errors = row.get('errors', 0)
 
-        # Only count as iMessage available if there were successful messages (errors < total)
-        if num_errors < text_count:
-            if service_type in ('iMessage', 'iMessageLite'):
+        # Only count as iMessage if we have clear evidence of successful delivery (not just one fluke).
+        # AppleScript can "succeed" for iMessage to Android then show Not Delivered, so we require
+        # at least 2 successful iMessage messages before trusting it.
+        if service_type in ('iMessage', 'iMessageLite'):
+            successful = text_count - num_errors
+            if successful >= 2:
                 return True
 
     return False
+
+
+def _imessage_check_error_message(exc: Exception, recipient: str) -> str:
+    """
+    Return a user-facing error when we couldn't determine iMessage availability.
+    Caller should not attempt to send; surface this to the user.
+    """
+    if isinstance(exc, sqlite3.OperationalError):
+        return check_messages_db_access()
+    err = str(exc).lower()
+    if "database" in err or "full disk" in err or "permission" in err or "sqlite" in err:
+        return check_messages_db_access()
+    return (
+        f"Cannot determine whether {recipient} has iMessage. "
+        "Please check the number is valid and try again, or send from Messages manually. "
+        f"Error: {exc}"
+    )
+
 
 def _send_message_sms(recipient: str, message: str, contact_name: str = None) -> str:
     """

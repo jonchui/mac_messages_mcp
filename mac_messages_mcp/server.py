@@ -76,10 +76,10 @@ def tool_get_recent_messages(ctx: Context, hours: int = 24, contact: str = None)
         return f"Error getting messages: {str(e)}"
 
 @mcp.tool()
-def tool_send_message(ctx: Context, recipient: str, message: str, group_chat: bool = False) -> str:
+def tool_send_message(ctx: Context, recipient: str | int, message: str, group_chat: bool = False) -> str:
     """
     Send a message using the Messages app.
-    
+
     Args:
         recipient: Phone number, email, contact name, or "contact:N" to select from matches.
                   For example, "contact:1" selects the first contact from a previous search.
@@ -87,10 +87,9 @@ def tool_send_message(ctx: Context, recipient: str, message: str, group_chat: bo
         message: Message text to send
         group_chat: Set to True when sending to a group chat. Uses the chat ID directly without contact lookup.
     """
+    recipient = str(recipient)
     logger.info(f"Sending message to: {recipient}, group_chat: {group_chat}")
     try:
-        # Ensure recipient is a string (handles numbers properly)
-        recipient = str(recipient)
         result = send_message(recipient=recipient, message=message, group_chat=group_chat)
         return result
     except Exception as e:
