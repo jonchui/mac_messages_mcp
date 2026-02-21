@@ -7,7 +7,9 @@
 
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/jonchui/Applications/MacMessagesMCP.app/Contents/MacOS/macmessagesmcp-launcher</string>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>/Users/jonchui/bin/start_mcp_proxy.sh</string>
   </array>
 
   <key>RunAtLoad</key>
