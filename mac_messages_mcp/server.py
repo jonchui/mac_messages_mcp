@@ -5,7 +5,10 @@ Mac Messages MCP - Entry point fixed for proper MCP protocol implementation
 
 import asyncio
 import logging
+import os
 import sys
+import traceback
+from pathlib import Path
 
 from mcp.server.fastmcp import Context, FastMCP
 
@@ -30,6 +33,23 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("mac_messages_mcp")
+
+# Debug log file: always write to a known file so Cursor/MCP failures are debuggable
+_DEBUG_LOG_PATH = Path(__file__).resolve().parent.parent / "mcp_server_debug.log"
+
+def _setup_debug_file_logging() -> None:
+    """Add a file handler so all logs (and crashes) are in mcp_server_debug.log."""
+    try:
+        _DEBUG_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        fh = logging.FileHandler(_DEBUG_LOG_PATH, encoding="utf-8")
+        fh.setLevel(logging.DEBUG)
+        fh.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        logger.addHandler(fh)
+        logger.info("[DEBUG] Logging to %s", _DEBUG_LOG_PATH)
+    except Exception as e:
+        logger.warning("[DEBUG] Could not open debug log file %s: %s", _DEBUG_LOG_PATH, e)
+
+_setup_debug_file_logging()
 
 # Initialize the MCP server
 mcp = FastMCP("MessageBridge")
@@ -278,13 +298,45 @@ def get_contact_messages_resource(contact: str, hours: int = 24) -> str:
     return get_recent_messages(hours=hours, contact=contact)
 
 def run_server():
-    """Run the MCP server with proper error handling"""
+    """Run the MCP server with proper error handling and debuggable exit paths."""
+    # Breadcrumbs so we know exactly what ran and where (critical when Cursor spawns us)
+    logger.info(
+        "[START] Mac Messages MCP server process: executable=%s cwd=%s pid=%s",
+        getattr(sys, "executable", "?"),
+        os.getcwd(),
+        os.getpid(),
+    )
     try:
-        logger.info("Starting Mac Messages MCP server...")
+        logger.info("[START] Entering mcp.run() (stdio transport)...")
         mcp.run()
+        logger.info("[EXIT] mcp.run() returned normally (client disconnected)")
+    except KeyboardInterrupt:
+        logger.info("[EXIT] KeyboardInterrupt")
+        raise
     except Exception as e:
-        logger.error(f"Failed to start server: {str(e)}")
+        tb = traceback.format_exc()
+        logger.error("[CRASH] Server failed: %s", e)
+        logger.error("[CRASH] Full traceback:\n%s", tb)
+        # Also write to debug file in case stderr isn't captured (e.g. Cursor MCP)
+        try:
+            with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write("\n--- CRASH ---\n")
+                f.write(tb)
+                f.write("\n")
+        except Exception:
+            pass
         sys.exit(1)
+    except BaseException as e:
+        tb = traceback.format_exc()
+        logger.error("[CRASH] Unexpected base exception: %s\n%s", e, tb)
+        try:
+            with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write("\n--- CRASH (BaseException) ---\n")
+                f.write(tb)
+                f.write("\n")
+        except Exception:
+            pass
+        raise
 
 if __name__ == "__main__":
     run_server()

@@ -45,6 +45,9 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
+# Lock file (optional: some teams commit uv.lock; remove this line if you do)
+uv.lock
+
 # Environments
 .env
 .venv
@@ -61,4 +64,7 @@ venv.bak/
 *.swo
 
 # macOS
-.DS_Store 
+.DS_Store
+
+# MCP debug log (local only)
+mcp_server_debug.log
