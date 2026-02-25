@@ -1,0 +1,41 @@
+# Caddyfile – HTTPS reverse proxy for Mac Messages MCP
+#
+# Runs on your Hostinger VPS. Caddy automatically provisions and renews
+# Let's Encrypt TLS certificates.
+#
+# Replace:
+#   mcp.yourdomain.com  → your actual domain
+#   YOUR_IMAC_PUBLIC_IP  → your iMac's public IP (or DynDNS hostname)
+#
+# Usage:
+#   sudo caddy run --config /etc/caddy/Caddyfile
+#   sudo caddy reload --config /etc/caddy/Caddyfile
+
+mcp.yourdomain.com {
+    # Reverse proxy all traffic to iMac
+    reverse_proxy YOUR_IMAC_PUBLIC_IP:8000 {
+        # Health checks – Caddy will stop routing if the iMac goes offline
+        health_uri /health
+        health_interval 30s
+        health_timeout 5s
+
+        # SSE connections can be long-lived
+        flush_interval -1
+    }
+
+    # Security headers
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/mcp-access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+}
