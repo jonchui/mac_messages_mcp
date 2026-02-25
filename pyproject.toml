@@ -40,6 +40,13 @@ dev = [
     "isort>=5.10.0",
     "mypy>=1.0.0",
 ]
+# Extra deps for the OAuth+SSL server (scripts/run_oauth_server.py).
+# These come bundled with mcp[cli] already, listed here for clarity.
+oauth = [
+    "uvicorn>=0.20.0",
+    "starlette>=0.27.0",
+    "anyio>=3.0.0",
+]
 
 # Define both entry points to ensure it works with either name
 [project.scripts]
