@@ -1,0 +1,50 @@
+# Cloudflare Tunnel configuration for Mac Messages MCP
+# ─────────────────────────────────────────────────────
+#
+# Provides free, stable HTTPS URLs for both environments
+# with no port-forwarding needed on your router.
+#
+# Setup (one-time, on your Mac mini):
+# ─────────────────────────────────────────────────────
+#   1. Install cloudflared:
+#        brew install cloudflared
+#
+#   2. Authenticate (opens browser, picks your Cloudflare account):
+#        cloudflared tunnel login
+#
+#   3. Create a tunnel (do this once, gives you a TUNNEL_ID):
+#        cloudflared tunnel create mac-messages-mcp
+#      Copy the UUID printed (your TUNNEL_ID).
+#
+#   4. Edit this file: replace TUNNEL_ID and YOURDOMAIN.COM below.
+#
+#   5. Add DNS records via Cloudflare dashboard (or CLI):
+#        cloudflared tunnel route dns mac-messages-mcp messages.YOURDOMAIN.COM
+#        cloudflared tunnel route dns mac-messages-mcp sandbox.YOURDOMAIN.COM
+#
+#   6. Copy this file to ~/.cloudflared/config.yml
+#        cp config/cloudflared.yml ~/.cloudflared/config.yml
+#
+#   7. Run as a persistent service (auto-starts on login):
+#        sudo cloudflared service install
+#        sudo launchctl start com.cloudflare.cloudflared
+#
+# ─────────────────────────────────────────────────────
+# After this, your URLs are always live, even after reboots.
+# Cloudflare issues and renews TLS certs automatically.
+# ─────────────────────────────────────────────────────
+
+tunnel: TUNNEL_ID
+credentials-file: /Users/YOUR_MACOS_USERNAME/.cloudflared/TUNNEL_ID.json
+
+ingress:
+  # Production (main branch) ─ port 8000
+  - hostname: messages.YOURDOMAIN.COM
+    service: http://localhost:8000
+
+  # Sandbox (sandbox branch) ─ port 8001
+  - hostname: sandbox.YOURDOMAIN.COM
+    service: http://localhost:8001
+
+  # Catch-all required by cloudflared
+  - service: http_status:404

@@ -1,0 +1,46 @@
+name: Test & Deploy
+
+# Runs on the self-hosted GitHub Actions runner installed on your Mac mini.
+# The runner polls GitHub (outbound only) – no inbound ports needed.
+#
+# Branch → Environment mapping:
+#   sandbox → http://localhost:8001  (EXTERNAL_URL=https://sandbox.YOURDOMAIN.com)
+#   main    → http://localhost:8000  (EXTERNAL_URL=https://YOURDOMAIN.com)
+
+on:
+  push:
+    branches: [main, sandbox]
+  pull_request:
+    branches: [main, sandbox]
+
+# One deploy at a time per environment
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-deploy:
+    runs-on: self-hosted          # ← your Mac mini runner
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Run tests
+        # On the Mac mini runner the unit tests run fine.
+        # Integration tests that hit the real Messages DB are skipped in CI
+        # to avoid needing Full Disk Access for the runner process.
+        run: uv run pytest tests/ --ignore=tests/test_integration.py -q --tb=short
+        continue-on-error: false   # flip to true while you're stabilising tests
+
+      # Only deploy on direct pushes to the branch, not on pull_request events
+      - name: Deploy
+        if: github.event_name == 'push'
+        run: ./scripts/deploy.sh "${{ github.ref_name }}"
+
+      - name: Health check
+        if: github.event_name == 'push'
+        run: ./scripts/health-check.sh "${{ github.ref_name }}"
