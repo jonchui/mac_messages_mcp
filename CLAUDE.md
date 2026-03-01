@@ -2,19 +2,15 @@
 
 ## Shell
 
-Always run shell commands via **zsh** (oh-my-zsh), not bare bash.
-The user's PATH is defined in `~/.zshrc` — tools like `gh`, `uv`, `brew`,
-`node`, and `cloudflared` are only visible after sourcing it.
+Use **`zsh`** — call it directly in the Bash tool. oh-my-zsh loads
+automatically and puts all Homebrew tools on PATH.
 
-Use this pattern in the Bash tool:
-```
-zsh -c 'source ~/.zshrc && <command>'
+```bash
+zsh -c 'gh pr create ...'
+zsh -c 'which gh'    # → /opt/homebrew/bin/gh
 ```
 
-Never declare a CLI tool missing without first checking:
-```
-zsh -c 'source ~/.zshrc && which <tool>'
-```
+Never declare a tool missing just because bare `bash` can't find it.
 
 ## Project layout
 
