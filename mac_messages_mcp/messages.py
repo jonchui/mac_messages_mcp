@@ -557,6 +557,16 @@ def _send_message_to_recipient(recipient: str, message: str, contact_name: str =
         Success or error message
     """
     try:
+        # If this looks like a phone number and iMessage is unavailable, prefer SMS.
+        if not group_chat and recipient.isdigit():
+            try:
+                if not _check_imessage_availability(recipient):
+                    sms_result = _send_message_sms(recipient, message, contact_name)
+                    if sms_result.startswith("SMS sent successfully"):
+                        return sms_result
+            except Exception:
+                pass
+
         # Create a temporary file with the message content
         file_path = os.path.abspath('imessage_tmp.txt')
         
