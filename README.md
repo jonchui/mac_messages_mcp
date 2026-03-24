@@ -345,6 +345,19 @@ Or run **from a clone of this repo** using `uv`. Cursor often **does not honor t
 
 Replace `/absolute/path/to/mac_messages_mcp` with your clone (for example `~/code/mac_messages_mcp` expanded to a full path). Then in a chat, ask e.g. “Use the Messages MCP to get my last 24 hours of messages.” Cursor will call the tools.
 
+**Most reliable in Cursor:** point `command` at the venv script so nothing depends on `uv` or cwd (after `uv sync` in the repo):
+
+```json
+"mcpServers": {
+  "mac-messages-mcp-local": {
+    "command": "/absolute/path/to/mac_messages_mcp/.venv/bin/mac-messages-mcp",
+    "args": []
+  }
+}
+```
+
+If you see `Failed to spawn: mac-messages-mcp` with only `uv run mac-messages-mcp`, that usually means **`--project` was missing**—`uv` never installed the package, so the executable does not exist. Cursor’s log may also label normal **stderr INFO** lines as `[error]` even when the server connected.
+
 See GitHub issue [#1](https://github.com/jonchui/mac_messages_mcp/issues/1) (2026-03-24) for the upstream version this fork merged and the Cursor/`uv` workaround.
 
 ### 3. Claude Desktop
