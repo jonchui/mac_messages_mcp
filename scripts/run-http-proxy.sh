@@ -20,4 +20,4 @@ echo "  Stream: http://<this-machine>:${PORT}/mcp"
 echo "Use ngrok or port forwarding to expose to the internet, then point Poke.com at the /sse or /mcp URL."
 echo ""
 
-exec npx mcp-proxy --port "$PORT" -- uv run python -m mac_messages_mcp.server
+exec npx mcp-proxy --port "$PORT" -- uv run --project "$REPO_ROOT" mac-messages-mcp

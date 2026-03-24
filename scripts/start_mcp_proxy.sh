@@ -105,7 +105,8 @@ if [ "$USE_TUNNEL" = "1" ]; then
   fi
 fi
 
-CMD+=(-- uv run python -m mac_messages_mcp.server)
+# Use --project so subprocesses still resolve the package if cwd is not inherited (e.g. some MCP proxies).
+CMD+=(-- uv run --project "$REPO_DIR" mac-messages-mcp)
 
 echo "Starting MCP proxy..."
 echo "public_host=$HOST public_port=$PORT backend_host=$BACKEND_HOST backend_port=$BACKEND_PORT mode=$SERVER_MODE tunnel=$USE_TUNNEL subdomain=$TUNNEL_SUBDOMAIN auth=$([ -n "$API_KEY" ] && echo enabled || echo disabled)"
@@ -118,4 +119,4 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-exec uv run python scripts/mcp_gateway.py --host "$HOST" --port "$PORT" --target "http://$BACKEND_HOST:$BACKEND_PORT" --deploy-info "$REPO_DIR/.runtime/deployed.json"
+exec uv run --project "$REPO_DIR" python scripts/mcp_gateway.py --host "$HOST" --port "$PORT" --target "http://$BACKEND_HOST:$BACKEND_PORT" --deploy-info "$REPO_DIR/.runtime/deployed.json"

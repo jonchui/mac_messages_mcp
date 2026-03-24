@@ -11,6 +11,7 @@ PLIST_PATH="$HOME/Library/LaunchAgents/$LABEL.plist"
 echo "Stopping stale MCP processes (if any)..."
 pkill -f "mcp-proxy" 2>/dev/null || true
 pkill -f "uv run python -m mac_messages_mcp.server" 2>/dev/null || true
+pkill -f "uv run --project.*mac-messages-mcp" 2>/dev/null || true
 
 echo "Restarting LaunchAgent: $LABEL"
 if [ -f "$PLIST_PATH" ]; then

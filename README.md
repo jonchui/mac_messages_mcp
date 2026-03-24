@@ -327,7 +327,25 @@ In **Cursor Settings → MCP**, add a server with command:
 uvx mac-messages-mcp
 ```
 
-Or from the repo: `uv run mac-messages-mcp` (with “Execute in project directory” or run from the repo root). Then in a chat, ask e.g. “Use the Messages MCP to get my last 24 hours of messages.” Cursor will call the tools.
+Or run **from a clone of this repo** using `uv`. Cursor often **does not honor the server “working directory”** for MCP, so `uv run` may run without seeing `pyproject.toml` and you get `ModuleNotFoundError: No module named 'mac_messages_mcp'`. Pass an explicit project path:
+
+```json
+"mcpServers": {
+  "mac-messages-mcp-local": {
+    "command": "uv",
+    "args": [
+      "run",
+      "--project",
+      "/absolute/path/to/mac_messages_mcp",
+      "mac-messages-mcp"
+    ]
+  }
+}
+```
+
+Replace `/absolute/path/to/mac_messages_mcp` with your clone (for example `~/code/mac_messages_mcp` expanded to a full path). Then in a chat, ask e.g. “Use the Messages MCP to get my last 24 hours of messages.” Cursor will call the tools.
+
+See GitHub issue [#1](https://github.com/jonchui/mac_messages_mcp/issues/1) (2026-03-24) for the upstream version this fork merged and the Cursor/`uv` workaround.
 
 ### 3. Claude Desktop
 
