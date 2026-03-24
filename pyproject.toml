@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mac-messages-mcp"
-version = "0.7.3"
+version = "0.8.0"
 description = "A bridge for interacting with macOS Messages app through MCP"
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.10,<3.14"
@@ -23,7 +23,7 @@ classifiers = [
     "Topic :: Communications :: Chat",
 ]
 dependencies = [
-    "mcp[cli]", # For FastMCP functionality with CLI support
+    "mcp[cli]>=1.2.0,<2.0.0", # For FastMCP functionality with CLI support
     "thefuzz>=0.20.0",
     "python-Levenshtein>=0.23.0", # Optional but recommended for performance
 ]
