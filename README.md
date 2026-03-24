@@ -462,6 +462,21 @@ security find-generic-password -a "$USER" -s "mac-messages-mcp/api-key" -w
 
 If run via SSH, the login keychain must be unlocked for that user session.
 
+### Mac mini: pull this fork and restart
+
+On the machine that runs the HTTP MCP proxy (paths match `start_mcp_proxy.sh` / LaunchAgent template):
+
+```bash
+REPO='/Users/jonchui/Library/Mobile Documents/com~apple~CloudDocs/code/mac_messages_mcp'
+cd "$REPO"
+git remote -v   # ensure origin is https://github.com/jonchui/mac_messages_mcp.git (or your fork URL)
+git pull origin main
+uv sync
+./scripts/restart.sh
+```
+
+That picks up `uv run --project "$REPO_DIR" mac-messages-mcp` in `start_mcp_proxy.sh` so the backend keeps resolving the package reliably. If **Cursor** on the mini talks to the server over stdio from a clone, use the same `uv run --project /path/to/clone mac-messages-mcp` MCP config as in § Cursor above.
+
 ### Optional app-wrapper launch (for Full Disk Access)
 
 If macOS Full Disk Access is easier to grant to an app than a Python binary, install:
