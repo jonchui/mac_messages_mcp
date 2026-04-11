@@ -60,6 +60,7 @@ venv.bak/
 # IDE
 .idea/
 .vscode/
+.cursor/
 *.swp
 *.swo
 
@@ -68,3 +69,6 @@ venv.bak/
 
 # MCP debug log (local only)
 mcp_server_debug.log
+
+# Approval batch (local state; contains phone numbers)
+data/approval_batch.json

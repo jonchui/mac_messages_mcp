@@ -1229,15 +1229,13 @@ def _send_message_direct(
     safe_message = message.replace('"', '\\"').replace('\\', '\\\\')
     safe_recipient = recipient.replace('"', '\\"')
     
-    # For group chats, stick to iMessage only (SMS doesn't support group chats well)
+    # For group chats, use the chat guid from the DB (e.g. iMessage;+;... or any;+;... for SMS groups)
     if group_chat:
         script = f'''
         tell application "Messages"
             try
-                -- Try to get the existing chat
-                set targetChat to chat "{safe_recipient}"
-                
-                -- Send the message
+                -- Reference the chat by its internal id (guid from chat.db)
+                set targetChat to a reference to chat id "{safe_recipient}"
                 send "{safe_message}" to targetChat
                 
                 -- Wait briefly to check for immediate errors
@@ -1459,6 +1457,90 @@ def find_handles_by_phone(phone: str) -> Optional[List[int]]:
         return None
     
     return [row["ROWID"] for row in results]
+
+
+def find_chat_by_participant_phones(phone_list: List[str]) -> Optional[str]:
+    """
+    Find an existing group chat that contains all the given participant phone numbers.
+    Returns the chat_identifier for sending, or None if no such chat exists.
+
+    Args:
+        phone_list: List of phone numbers (any format) that must be in the group.
+
+    Returns:
+        chat_identifier (e.g. "chat123...") if a chat with all participants exists, else None.
+    """
+    if not phone_list or len(phone_list) < 2:
+        return None
+    try:
+        # Build handle id formats (for DB lookup) for each participant
+        participant_formats: List[Tuple[str, ...]] = []
+        for phone in phone_list:
+            normalized = normalize_phone_number(phone)
+            if not normalized:
+                return None
+            formats = _get_phone_formats(normalized)
+            participant_formats.append(tuple(formats))
+
+        # Find chats that have at least one handle from each participant
+        exists_clauses = []
+        for i, fmts in enumerate(participant_formats):
+            ph = ", ".join(["?" for _ in fmts])
+            exists_clauses.append(
+                f"""EXISTS (
+                SELECT 1 FROM chat_handle_join chj{i}
+                JOIN handle h{i} ON chj{i}.handle_id = h{i}.ROWID
+                WHERE chj{i}.chat_id = c.ROWID
+                AND h{i}.id IN ({ph})
+                )"""
+            )
+
+        query = f"""
+        SELECT c.chat_identifier, c.guid
+        FROM chat c
+        WHERE {" AND ".join(exists_clauses)}
+        ORDER BY c.ROWID DESC
+        LIMIT 1
+        """
+        # Flatten params in the same order as placeholders in EXISTS
+        flat_params: List[Any] = []
+        for fmts in participant_formats:
+            flat_params.extend(fmts)
+        results = query_messages_db(query, tuple(flat_params))
+        if not results or "error" in results[0]:
+            return None
+        row = results[0]
+        # AppleScript expects the chat's guid (e.g. "iMessage;-;..." or "any;+;...") for group send
+        guid = row.get("guid") if row else None
+        if guid:
+            return guid
+        return row.get("chat_identifier") if row else None
+    except Exception:
+        return None
+
+
+def send_message_to_group(participant_phones: List[str], message: str) -> str:
+    """
+    Send a message to an existing group chat that contains exactly the given participants.
+    If no such group exists, returns instructions for the user to create it in Messages first.
+
+    Args:
+        participant_phones: List of participant phone numbers (e.g. ["2197468952", "7202315185", ...]).
+        message: Text to send.
+
+    Returns:
+        Success message, or error/instructions if group not found.
+    """
+    chat_id = find_chat_by_participant_phones(participant_phones)
+    if not chat_id:
+        phones_str = ", ".join(participant_phones[:4])
+        return (
+            "No existing group chat found with exactly those participants. "
+            "Create the group in Messages first: New Message → add these numbers → send any message. "
+            f"Participants: {phones_str}"
+        )
+    return send_message(recipient=chat_id, message=message, group_chat=True)
+
 
 def check_addressbook_access() -> str:
     """Check if the AddressBook database is accessible and return detailed information."""

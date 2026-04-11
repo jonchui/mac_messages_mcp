@@ -357,7 +357,78 @@ print(result)  # Shows whether sent via iMessage or SMS
 mac-messages-mcp
 ```
 
+## Campaign Ops MVP (Local Webview)
+
+For lightweight campaign tracking (groups/cohorts/tags/reply rates), run:
+
+```bash
+uv run python scripts/campaign_webview.py
+```
+
+Then open `http://127.0.0.1:8765`.
+
+What this MVP tracks:
+- Campaign metadata: name, objective, CTA, response playbook prompt
+- Recipients per campaign
+- Tags (e.g. `group:wed_waitlist`, `cohort:3_5_plus`)
+- Reply outcomes (`yes` / `no` / `maybe` / `unknown`) and conversion %
+- Rerun scaffold: clone previous campaign into a new pending run
+- Contact preferences for waitlist alerts (`waitlist_opt_in`, lead-time minutes, `auto_booking_opt_in`)
+
+Recipient input format (one per line):
+
+```text
+Name|Phone|optional_tags
+Rob Swanson|3035209551|group:wed_waitlist,cohort:3_5_plus
+Erika Yaroni|7322663659|group:wed_waitlist
+```
+
+SQLite file location (default):
+- `data/campaign_ops.db`
+
+### Live reply notifications (campaign/tag monitor)
+
+When scoped contacts reply, this monitor will:
+- update `campaign_ops.db` (`campaign_contacts` + `inbound_events`)
+- classify response (`yes/no/maybe/unknown`)
+- generate a short GTD-style suggested action
+- send an iMessage alert to your chosen phone or group chat
+
+Run:
+
+```bash
+uv run python scripts/campaign_reply_monitor.py \
+  --campaign-id 1 \
+  --tag group:wed_waitlist \
+  --notify-to 13035551234 \
+  --interval 20
+```
+
+Options:
+- `--notify-group-chat` if `--notify-to` is a Messages chat ID
+- `--hook-cmd "your-command"` to trigger another local workflow (payload JSON via stdin)
+- `--dry-run` to validate logic without sending notifications
+
 ## Development
+
+### Unit tests and pre-commit
+
+Function tests (send flow, iMessage vs SMS, error handling) live in `tests/test_send_message.py` and `tests/test_messages.py`. Run them before committing:
+
+```bash
+python -m unittest discover -s tests -p "test_*.py" -v
+# or
+./scripts/run_tests.sh
+```
+
+To block commits when tests fail, install the pre-commit hook:
+
+```bash
+pip install pre-commit   # or: uv pip install pre-commit
+pre-commit install
+```
+
+After that, every `git commit` runs the tests; the commit is aborted if they fail.
 
 ### Versioning
 

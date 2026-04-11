@@ -23,6 +23,7 @@ from mac_messages_mcp.messages import (
     get_unread_messages,
     query_messages_db,
     send_message,
+    send_message_to_group,
 )
 
 # Configure logging to stderr for debugging
@@ -95,6 +96,27 @@ def tool_send_message(ctx: Context, recipient: str | int, message: str, group_ch
     except Exception as e:
         logger.error(f"Error in send_message: {str(e)}")
         return f"Error sending message: {str(e)}"
+
+@mcp.tool()
+def tool_send_message_to_group(ctx: Context, participant_phones: str, message: str) -> str:
+    """
+    Send a message to an existing group chat that contains all the given participants.
+    If no such group exists, returns instructions to create it in Messages first (New Message → add those numbers → send any message).
+
+    Args:
+        participant_phones: Comma-separated phone numbers, e.g. "2197468952,7202315185,7204455505,3037269954"
+        message: Message text to send to the group.
+    """
+    logger.info(f"Sending group message to participants: {participant_phones}")
+    try:
+        phones = [p.strip() for p in participant_phones.split(",") if p.strip()]
+        if len(phones) < 2:
+            return "Error: At least 2 participant phone numbers required (comma-separated)."
+        result = send_message_to_group(participant_phones=phones, message=message)
+        return result
+    except Exception as e:
+        logger.error(f"Error in send_message_to_group: {str(e)}")
+        return f"Error sending group message: {str(e)}"
 
 @mcp.tool()
 def tool_find_contact(ctx: Context, name: str) -> str:
