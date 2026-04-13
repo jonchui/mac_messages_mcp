@@ -263,9 +263,13 @@ def query_addressbook_db(query: str, params: tuple = ()) -> List[Dict[str, Any]]
     try:
         # Find the AddressBook database paths
         home_dir = os.path.expanduser("~")
+        # Check both the top-level DB and source-specific DBs (iCloud, Google, Exchange, etc.)
+        toplevel_path = os.path.join(home_dir, "Library/Application Support/AddressBook/AddressBook-v22.abcddb")
         sources_path = os.path.join(home_dir, "Library/Application Support/AddressBook/Sources/*/AddressBook-v22.abcddb")
         db_paths = glob.glob(sources_path)
-        
+        if os.path.exists(toplevel_path):
+            db_paths.append(toplevel_path)
+
         if not db_paths:
             return [{"error": f"AddressBook database not found at {sources_path} PLEASE TELL THE USER TO GRANT FULL DISK ACCESS TO THE TERMINAL APPLICATION(CURSOR, TERMINAL, CLAUDE, ETC.) AND RESTART THE APPLICATION. DO NOT RETRY UNTIL NEXT MESSAGE."}]
         
@@ -300,7 +304,7 @@ def get_addressbook_contacts() -> Dict[str, str]:
     contacts_map = {}
     
     # Define the query to get contact names, nicknames, and phone numbers
-    query = """
+    phone_query = """
     SELECT
         ZABCDRECORD.ZFIRSTNAME as first_name,
         ZABCDRECORD.ZLASTNAME as last_name,
@@ -316,7 +320,24 @@ def get_addressbook_contacts() -> Dict[str, str]:
         ZABCDRECORD.ZFIRSTNAME,
         ZABCDPHONENUMBER.ZORDERINGINDEX ASC
     """
-    
+
+    # Query for email-based contacts (used by iMessage when handle is an email)
+    email_query = """
+    SELECT
+        ZABCDRECORD.ZFIRSTNAME as first_name,
+        ZABCDRECORD.ZLASTNAME as last_name,
+        ZABCDRECORD.ZNICKNAME as nickname,
+        ZABCDEMAILADDRESS.ZADDRESS as email
+    FROM
+        ZABCDRECORD
+        LEFT JOIN ZABCDEMAILADDRESS ON ZABCDRECORD.Z_PK = ZABCDEMAILADDRESS.ZOWNER
+    WHERE
+        ZABCDEMAILADDRESS.ZADDRESS IS NOT NULL
+    ORDER BY
+        ZABCDRECORD.ZLASTNAME,
+        ZABCDRECORD.ZFIRSTNAME
+    """
+
     try:
         # For testing/fallback, parse the user-provided examples in cases where direct DB access fails
         # This is a temporary workaround until full disk access is granted
@@ -325,15 +346,20 @@ def get_addressbook_contacts() -> Dict[str, str]:
                 {"first_name":"TEST", "last_name":"TEST", "phone":"+11111111111"}
             ]
             return process_contacts(contacts)
-        
+
         # Try to query database directly
-        results = query_addressbook_db(query)
-        
+        results = query_addressbook_db(phone_query)
+
         if results and "error" in results[0]:
             print(f"Error getting AddressBook contacts: {results[0]['error']}")
             # Fall back to subprocess method if direct DB access fails
             return get_addressbook_contacts_subprocess()
-        
+
+        # Also query email addresses for email-based iMessage handles
+        email_results = query_addressbook_db(email_query)
+        if email_results and not (len(email_results) > 0 and "error" in email_results[0]):
+            results.extend(email_results)
+
         return process_contacts(results)
     except Exception as e:
         print(f"Error getting AddressBook contacts: {str(e)}")
@@ -351,6 +377,29 @@ def process_contacts(contacts) -> Dict[str, str]:
             last_name = contact.get("last_name", "") or ""
             nickname = contact.get("nickname", "") or ""
             phone = contact.get("phone", "")
+            email = contact.get("email", "")
+
+            # Create full name
+            full_name = " ".join(filter(None, [first_name, last_name]))
+            if not full_name.strip():
+                continue
+
+            # Handle email-based contacts (iMessage handles can be email addresses)
+            if email and not phone:
+                email_lower = email.strip().lower()
+                contacts_map[email_lower] = full_name
+
+                phone_to_details[email_lower] = {
+                    "first_name": first_name.strip(),
+                    "last_name": last_name.strip(),
+                    "nickname": nickname.strip(),
+                    "full_name": full_name
+                }
+
+                if full_name not in name_to_numbers:
+                    name_to_numbers[full_name] = []
+                name_to_numbers[full_name].append(email_lower)
+                continue
 
             # Skip entries without phone numbers
             if not phone:
@@ -359,11 +408,6 @@ def process_contacts(contacts) -> Dict[str, str]:
             # Clean up phone number and remove any image metadata
             if "X-IMAGETYPE" in phone:
                 phone = phone.split("X-IMAGETYPE")[0]
-
-            # Create full name
-            full_name = " ".join(filter(None, [first_name, last_name]))
-            if not full_name.strip():
-                continue
 
             # Normalize phone number and add to map
             normalized_phone = normalize_phone_number(phone)
@@ -679,21 +723,28 @@ def get_contact_name(handle_id: int) -> str:
     
     # Try to match with AddressBook contacts
     contacts = get_cached_contacts()
-    normalized_handle = normalize_phone_number(handle_id_value)
-    
-    # Try different variations of the number for matching
-    if normalized_handle in contacts:
-        return contacts[normalized_handle]
-    
-    # Sometimes numbers in the addressbook have the country code, but messages don't
-    if normalized_handle.startswith('1') and len(normalized_handle) > 10:
-        # Try without country code
-        if normalized_handle[1:] in contacts:
-            return contacts[normalized_handle[1:]]
-    elif len(normalized_handle) == 10:  # US number without country code
-        # Try with country code
-        if '1' + normalized_handle in contacts:
-            return contacts['1' + normalized_handle]
+
+    # Check if handle is an email address (contains @ and no leading +)
+    if '@' in handle_id_value:
+        email_lower = handle_id_value.strip().lower()
+        if email_lower in contacts:
+            return contacts[email_lower]
+    else:
+        normalized_handle = normalize_phone_number(handle_id_value)
+
+        # Try different variations of the number for matching
+        if normalized_handle in contacts:
+            return contacts[normalized_handle]
+
+        # Sometimes numbers in the addressbook have the country code, but messages don't
+        if normalized_handle.startswith('1') and len(normalized_handle) > 10:
+            # Try without country code
+            if normalized_handle[1:] in contacts:
+                return contacts[normalized_handle[1:]]
+        elif len(normalized_handle) == 10:  # US number without country code
+            # Try with country code
+            if '1' + normalized_handle in contacts:
+                return contacts['1' + normalized_handle]
     
     # If no match found in AddressBook, fall back to display name from chat
     contact_query = """
@@ -844,18 +895,19 @@ def get_recent_messages(hours: int = 24, contact: Optional[str] = None) -> str:
     
     # Build the SQL query - use attributedBody field and text
     query = """
-    SELECT 
+    SELECT
         m.ROWID,
-        m.date, 
-        m.text, 
+        m.date,
+        m.text,
         m.attributedBody,
         m.is_from_me,
         m.handle_id,
-        m.cache_roomnames
-    FROM 
+        m.cache_roomnames,
+        m.cache_has_attachments
+    FROM
         message m
-    WHERE 
-        CAST(m.date AS TEXT) > ? 
+    WHERE
+        CAST(m.date AS TEXT) > ?
     """
     
     params = [timestamp_str]
@@ -884,16 +936,36 @@ def get_recent_messages(hours: int = 24, contact: Optional[str] = None) -> str:
     formatted_messages = []
     for msg in messages:
         # Get the message content from text or attributedBody
+        has_attachment = msg.get('cache_has_attachments', 0)
         if msg.get('text'):
             body = msg['text']
         elif msg.get('attributedBody'):
             body = extract_body_from_attributed(msg['attributedBody'])
             if not body:
-                # Skip messages with no content
-                continue
+                if has_attachment:
+                    body = ""
+                else:
+                    continue
         else:
-            # Skip empty messages
-            continue
+            if has_attachment:
+                body = ""
+            else:
+                continue
+
+        # Append attachment summary if message has attachments
+        if has_attachment:
+            att_list = get_attachments_for_message(msg['ROWID'])
+            if att_list:
+                att_descriptions = []
+                for att in att_list:
+                    mime = att.get("mime_type") or att.get("uti") or "file"
+                    name = att.get("transfer_name") or (os.path.basename(att["filename"]) if att.get("filename") else "attachment")
+                    att_descriptions.append(f"{name} ({mime})")
+                att_str = ", ".join(att_descriptions)
+                if body:
+                    body = f"{body} [Attachments: {att_str}]"
+                else:
+                    body = f"[Attachments: {att_str}]"
         
         # Convert Apple timestamp to readable date
         try:
@@ -999,6 +1071,193 @@ def get_unread_messages(limit: int = 50) -> str:
 
     if not formatted:
         return "No unread messages with readable content."
+    return "\n".join(formatted)
+
+
+def get_attachments_for_message(message_id: int) -> List[Dict[str, Any]]:
+    """
+    Get attachment details for a specific message.
+
+    Args:
+        message_id: The ROWID of the message in the message table.
+
+    Returns:
+        List of attachment dicts with filename, mime_type, total_bytes, etc.
+    """
+    query = """
+    SELECT
+        a.ROWID,
+        a.guid,
+        a.filename,
+        a.mime_type,
+        a.uti,
+        a.total_bytes,
+        a.transfer_state,
+        a.is_outgoing,
+        a.transfer_name
+    FROM attachment a
+    JOIN message_attachment_join maj ON a.ROWID = maj.attachment_id
+    WHERE maj.message_id = ?
+    """
+    results = query_messages_db(query, (message_id,))
+    if results and "error" in results[0]:
+        return []
+    return results
+
+
+def get_recent_attachments(hours: int = 24, contact: Optional[str] = None, mime_filter: Optional[str] = None) -> str:
+    """
+    Get recent message attachments from the Messages app.
+
+    Args:
+        hours: Number of hours to look back (default: 24)
+        contact: Filter by contact name, phone number, or email (optional).
+                 Use "contact:N" to select a specific contact from previous matches.
+        mime_filter: Filter by MIME type prefix, e.g. "image", "video", "audio" (optional)
+
+    Returns:
+        Formatted string listing recent attachments with metadata.
+    """
+    if hours < 0:
+        return "Error: Hours cannot be negative."
+
+    MAX_HOURS = 10 * 365 * 24
+    if hours > MAX_HOURS:
+        return f"Error: Hours value too large. Maximum allowed is {MAX_HOURS} hours (10 years)."
+
+    handle_ids = None
+
+    if contact:
+        contact = str(contact).strip()
+
+        if contact.lower().startswith("contact:"):
+            try:
+                contact_parts = contact.split(":", 1)
+                if len(contact_parts) < 2 or not contact_parts[1].strip():
+                    return "Error: Invalid contact selection format. Use 'contact:N' where N is a positive number."
+                index = int(contact_parts[1].strip()) - 1
+                if index < 0:
+                    return "Error: Contact selection must be a positive number (starting from 1)."
+                if not hasattr(get_recent_messages, "recent_matches") or not get_recent_messages.recent_matches:
+                    return "No recent contact matches available. Please search for a contact first."
+                if index >= len(get_recent_messages.recent_matches):
+                    return f"Invalid selection. Please choose a number between 1 and {len(get_recent_messages.recent_matches)}."
+                contact = get_recent_messages.recent_matches[index]['phone']
+            except ValueError:
+                return "Error: Contact selection must be a number."
+
+        if not all(c.isdigit() or c in '+- ()@.' for c in contact):
+            matches = find_contact_by_name(contact)
+            if not matches:
+                return f"No contacts found matching '{contact}'."
+            if len(matches) == 1:
+                contact = matches[0]['phone']
+            else:
+                get_recent_messages.recent_matches = matches
+                contact_list = "\n".join([f"{i+1}. {c['name']} ({c['phone']})" for i, c in enumerate(matches[:10])])
+                return f"Multiple contacts found matching '{contact}'. Please specify which one using 'contact:N' where N is the number:\n{contact_list}"
+
+        if '@' in contact:
+            query = "SELECT ROWID FROM handle WHERE id = ?"
+            results = query_messages_db(query, (contact,))
+            if results and "error" not in results[0] and len(results) > 0:
+                handle_ids = [row["ROWID"] for row in results]
+        else:
+            handle_ids = find_handles_by_phone(contact)
+
+        if not handle_ids:
+            return f"No message history found with '{contact}'."
+
+    # Calculate timestamp
+    current_time = datetime.now(timezone.utc)
+    hours_ago = current_time - timedelta(hours=hours)
+    apple_epoch = datetime(2001, 1, 1, tzinfo=timezone.utc)
+    seconds_since_apple_epoch = (hours_ago - apple_epoch).total_seconds()
+    nanoseconds_since_apple_epoch = int(seconds_since_apple_epoch * 1_000_000_000)
+    timestamp_str = str(nanoseconds_since_apple_epoch)
+
+    query = """
+    SELECT
+        m.ROWID as message_id,
+        m.date,
+        m.is_from_me,
+        m.handle_id,
+        a.filename,
+        a.mime_type,
+        a.uti,
+        a.total_bytes,
+        a.transfer_state,
+        a.transfer_name
+    FROM message m
+    JOIN message_attachment_join maj ON m.ROWID = maj.message_id
+    JOIN attachment a ON maj.attachment_id = a.ROWID
+    WHERE CAST(m.date AS TEXT) > ?
+    """
+
+    params: list = [timestamp_str]
+
+    if handle_ids:
+        placeholders = ", ".join(["?" for _ in handle_ids])
+        query += f"AND m.handle_id IN ({placeholders}) "
+        params.extend(handle_ids)
+
+    if mime_filter:
+        query += "AND a.mime_type LIKE ? "
+        params.append(f"{mime_filter}%")
+
+    query += "ORDER BY m.date DESC LIMIT 50"
+
+    attachments = query_messages_db(query, tuple(params))
+
+    if not attachments:
+        return "No attachments found in the specified time period."
+
+    if "error" in attachments[0]:
+        return f"Error accessing attachments: {attachments[0]['error']}"
+
+    chat_mapping = get_chat_mapping()
+    formatted = []
+    for att in attachments:
+        # Convert timestamp
+        try:
+            apple_epoch_offset = 978307200
+            msg_timestamp = int(att["date"])
+            msg_timestamp_s = (
+                msg_timestamp / 1_000_000_000
+                if len(str(msg_timestamp)) > 10
+                else msg_timestamp
+            )
+            date_val = datetime.fromtimestamp(msg_timestamp_s + apple_epoch_offset, tz=timezone.utc)
+            date_str = date_val.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+        except (ValueError, TypeError, OverflowError):
+            date_str = "Unknown date"
+
+        direction = "You" if att["is_from_me"] else get_contact_name(att["handle_id"])
+
+        filename = att.get("filename") or att.get("transfer_name") or "unknown"
+        # Expand ~ in filename
+        if filename.startswith("~"):
+            filename = os.path.expanduser(filename)
+
+        mime = att.get("mime_type") or att.get("uti") or "unknown"
+        size_bytes = att.get("total_bytes", 0)
+        if size_bytes and size_bytes > 0:
+            if size_bytes > 1_000_000:
+                size_str = f"{size_bytes / 1_000_000:.1f} MB"
+            elif size_bytes > 1_000:
+                size_str = f"{size_bytes / 1_000:.1f} KB"
+            else:
+                size_str = f"{size_bytes} bytes"
+        else:
+            size_str = "unknown size"
+
+        transfer = att.get("transfer_state", 0)
+        status = "complete" if transfer == 5 else f"state={transfer}"
+
+        formatted.append(
+            f"[{date_str}] {direction}: [{mime}, {size_str}, {status}] {filename}"
+        )
+
     return "\n".join(formatted)
 
 
