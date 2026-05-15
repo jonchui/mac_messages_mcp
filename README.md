@@ -135,7 +135,7 @@ For **private** remote access (e.g. Tailscale) without `mcp-proxy` + `mcp_gatewa
 ./scripts/run_http_service.sh
 ```
 
-That writes `.runtime/deployed.json`, loads an optional bearer from Keychain (`mac-messages-mcp/api-key`), and runs **one** Uvicorn stack (see `mac_messages_mcp/http_server.py`). Rationale: [issue #3](https://github.com/jonchui/mac_messages_mcp/issues/3).
+That writes `.runtime/deployed.json`, loads an optional bearer from Keychain (`mac-messages-mcp/api-key`), and runs **one** Uvicorn stack (see `mac_messages_mcp/http_server.py`). Rationale: [issue #3](https://github.com/jonchui/mac_messages_mcp/issues/3). **Deploy / audit:** [`docs/DEPLOY_MAC_MINI.md`](docs/DEPLOY_MAC_MINI.md) and `scripts/deploy_mac_mini.sh`.
 
 - **Auth (optional):** set `MAC_MESSAGES_MCP_BEARER_TOKEN`, or use the same Keychain entry as the legacy proxy. Remote clients: `Authorization: Bearer …` or `X-API-Key`.
 - **Legacy WAN stack:** `scripts/start_mcp_proxy.sh` + `scripts/mcp_gateway.py` remain for tunnel / multi-process setups.
