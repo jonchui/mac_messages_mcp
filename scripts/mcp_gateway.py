@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-Small HTTP gateway in front of mcp-proxy:
-- exposes /status on the public port
-- proxies all other paths to mcp-proxy backend (supports SSE streaming)
+Legacy: HTTP gateway in front of Node ``mcp-proxy`` + FastMCP backend.
+
+**Preferred for Tailscale/LAN:** run ``scripts/run_http_service.sh`` (single
+Uvicorn + SSE; see mac_messages_mcp/http_server.py and GitHub issue #3).
+
+Keep this script for tunnel / ``mcp-proxy --tunnel`` workflows only.
 """
 
 from __future__ import annotations
 
 import argparse
-import asyncio
 import datetime as dt
 import hashlib
 import json
@@ -90,6 +92,29 @@ def extract_jsonrpc_method(body: bytes) -> str | None:
     return None
 
 
+def log_gateway_proxy_error(
+    request: Request,
+    req_headers: dict[str, str],
+    body: bytes,
+    exc: httpx.RequestError,
+) -> None:
+    sanitized_headers = {k: sanitize_header_value(k, v) for k, v in req_headers.items()}
+    client_ip = request.client.host if request.client else "unknown"
+    event = {
+        "event": "gateway_proxy_error",
+        "ts": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "client_ip": client_ip,
+        "method": request.method,
+        "path": request.url.path,
+        "query": request.url.query,
+        "error_type": type(exc).__name__,
+        "error_message": str(exc),
+        "jsonrpc_method": extract_jsonrpc_method(body),
+        "headers": sanitized_headers,
+    }
+    print(json.dumps(event, ensure_ascii=True), flush=True)
+
+
 def log_gateway_request(
     request: Request,
     req_headers: dict[str, str],
@@ -127,6 +152,36 @@ def create_app(target_base: str, deploy_info_path: Path) -> Starlette:
     async def status_endpoint(_: Request) -> Response:
         return JSONResponse(load_deploy_info(deploy_info_path))
 
+    async def upstream_health(_: Request) -> Response:
+        """
+        TCP/HTTP probe of mcp-proxy (backend). The gateway process often outlives
+        the background `mcp-proxy` child; this endpoint makes that visible.
+        """
+        probe_url = f"{target_base}/"
+        try:
+            r = await client.get(probe_url, timeout=httpx.Timeout(3.0, connect=2.0))
+            body: dict = {
+                "upstream_probe": {"url": probe_url, "status_code": r.status_code},
+                "reachable": True,
+            }
+            status = 200
+            if r.status_code >= 500:
+                body["warning"] = "upstream returned 5xx; MCP routes may be broken"
+                status = 503
+            return JSONResponse(body, status_code=status)
+        except httpx.RequestError as exc:
+            return JSONResponse(
+                {
+                    "reachable": False,
+                    "error_type": type(exc).__name__,
+                    "message": str(exc),
+                    "hint": "mcp-proxy on the backend port may have crashed or been OOM-killed; "
+                    "LaunchAgent KeepAlive only supervises this gateway, not the proxy child. "
+                    "Run scripts/restart.sh on the Mac mini.",
+                },
+                status_code=503,
+            )
+
     async def proxy(request: Request) -> Response:
         target_url = f"{target_base}{request.url.path}"
         if request.url.query:
@@ -142,7 +197,21 @@ def create_app(target_base: str, deploy_info_path: Path) -> Starlette:
             headers=req_headers,
             content=body if body else None,
         )
-        upstream = await client.send(outbound, stream=True)
+        try:
+            upstream = await client.send(outbound, stream=True)
+        except httpx.RequestError as exc:
+            log_gateway_proxy_error(request, req_headers, body, exc)
+            return JSONResponse(
+                {
+                    "error": "bad_gateway",
+                    "detail": type(exc).__name__,
+                    "message": str(exc),
+                    "hint": "Backend mcp-proxy is unreachable from the gateway. "
+                    "It runs as a background child of start_mcp_proxy.sh and is not "
+                    "restarted automatically when it exits.",
+                },
+                status_code=502,
+            )
         log_gateway_request(request, req_headers, body, upstream.status_code)
 
         resp_headers = filter_headers(upstream.headers.items())
@@ -162,6 +231,7 @@ def create_app(target_base: str, deploy_info_path: Path) -> Starlette:
     app = Starlette(
         routes=[
             Route("/healthz", health, methods=["GET"]),
+            Route("/healthz/upstream", upstream_health, methods=["GET"]),
             Route("/status", status_endpoint, methods=["GET"]),
             Route(
                 "/{path:path}",

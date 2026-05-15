@@ -311,13 +311,20 @@ def run_server():
     """Run the MCP server with proper error handling.
     Set MCP_TRANSPORT=sse to serve over HTTP (default: stdio).
     When using SSE, set FASTMCP_HOST (default 0.0.0.0) and FASTMCP_PORT (default 8000).
+    Remote SSE uses a single Uvicorn process (see ``http_server``); use
+    ``scripts/run_http_service.sh`` + LaunchAgent instead of mcp-proxy + gateway.
     """
     transport = os.environ.get("MCP_TRANSPORT", "stdio").lower()
     if transport not in ("stdio", "sse"):
         transport = "stdio"
     try:
         logger.info("Starting Mac Messages MCP server (transport=%s)...", transport)
-        mcp.run(transport=transport)
+        if transport == "stdio":
+            mcp.run(transport="stdio")
+        else:
+            from mac_messages_mcp.http_server import serve_sse_http
+
+            serve_sse_http(mcp)
     except Exception as e:
         logger.error(f"Failed to start server: {str(e)}")
         sys.exit(1)
