@@ -5,7 +5,21 @@ This repo’s **LaunchAgent** should run **`scripts/run_http_service.sh`** (sing
 ## Prerequisites
 
 - **SSH** to the mini as a user that owns the git clone and LaunchAgent (usually your macOS account).
-- **Clone path** must match **`ProgramArguments`** in `~/Library/LaunchAgents/com.jonchui.mac-messages-mcp.plist` (often iCloud Drive path from the plist template).
+- **Clone path** must match **`ProgramArguments`** and **`WorkingDirectory`** in `~/Library/LaunchAgents/com.jonchui.mac-messages-mcp.plist`.
+
+### iCloud Drive and LaunchAgent (critical)
+
+macOS often returns **`Operation not permitted` (exit 126)** when **LaunchAgent** runs **`/bin/bash …/run_http_service.sh`** from **`Library/Mobile Documents/`** (iCloud-synced “Desktop & Documents”). Login **SSH** works; **launchd** does not.
+
+**Fix:** keep an **extra clone outside iCloud** for the daemon only, e.g. **`$HOME/src/mac_messages_mcp`**, and point the plist **`ProgramArguments`** + **`WorkingDirectory`** at that path (`PlistBuddy` or edit by hand). Use **git** to sync; keep iCloud copy for editor convenience if you want.
+
+```bash
+mkdir -p ~/src
+git clone https://github.com/jonchui/mac_messages_mcp.git ~/src/mac_messages_mcp
+cd ~/src/mac_messages_mcp && git checkout feat/tailscale-single-process-sse   # or main
+# Then set LaunchAgent script + WorkingDirectory to this path and reload the plist.
+```
+
 - **Tailscale** on laptop + mini (or LAN) so you can use `100.x.x.x` or MagicDNS.
 
 This Cursor/agent environment **does not** have your SSH keys or Tailscale DNS; **you** run the commands below from a trusted machine.
