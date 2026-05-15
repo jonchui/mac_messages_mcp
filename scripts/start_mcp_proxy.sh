@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Legacy multi-process stack: Node mcp-proxy (background) + Python mcp_gateway.
+# For Tailscale-only access use scripts/run_http_service.sh (single process).
+#
 # Ensure user-level toolchains are available in launchd shells.
 export PATH="$HOME/.local/bin:$PATH"
 export NVM_DIR="$HOME/.nvm"

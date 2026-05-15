@@ -7,7 +7,8 @@
 
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/jonchui/Applications/MacMessagesMCP.app/Contents/MacOS/macmessagesmcp-launcher</string>
+    <string>/bin/bash</string>
+    <string>/Users/jonchui/Library/Mobile Documents/com~apple~CloudDocs/code/mac_messages_mcp/scripts/run_http_service.sh</string>
   </array>
 
   <key>RunAtLoad</key>
@@ -27,15 +28,13 @@
 
   <key>EnvironmentVariables</key>
   <dict>
-    <key>MCP_PROXY_HOST</key>
+    <key>MCP_TRANSPORT</key>
+    <string>sse</string>
+    <key>FASTMCP_HOST</key>
     <string>0.0.0.0</string>
-    <key>MCP_PROXY_PORT</key>
+    <key>FASTMCP_PORT</key>
     <string>8000</string>
-    <key>MCP_PROXY_SERVER_MODE</key>
-    <string>both</string>
-    <key>MCP_PROXY_TUNNEL</key>
-    <string>1</string>
-    <key>MCP_PROXY_API_KEY</key>
+    <key>MAC_MESSAGES_MCP_BEARER_TOKEN</key>
     <string></string>
   </dict>
 </dict>

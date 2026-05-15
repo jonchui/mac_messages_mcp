@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 
 PORT="${1:-8000}"
-API_KEY="${MCP_PROXY_API_KEY:-}"
+TOKEN="${MAC_MESSAGES_MCP_BEARER_TOKEN:-${MCP_PROXY_API_KEY:-}}"
 
 echo "== MCP Service Status =="
 echo "Label: $LABEL"
@@ -37,7 +37,7 @@ echo
 if launchctl print "gui/$(id -u)/$LABEL" >/tmp/mcp_status.$$ 2>/dev/null; then
   echo "-- launchctl --"
   awk '
-    /state = / || /pid = / || /MCP_PROXY_PORT =>/ || /MCP_PROXY_SERVER_MODE =>/ || /MCP_PROXY_TUNNEL =>/ || /MCP_PROXY_HOST =>/
+    /state = / || /pid = / || /FASTMCP_PORT =>/ || /MCP_TRANSPORT =>/
   ' /tmp/mcp_status.$$
 else
   echo "-- launchctl --"
@@ -55,15 +55,15 @@ fi
 echo
 
 echo "-- local endpoint probe --"
-if [[ -n "$API_KEY" ]]; then
-  curl -sS -i --max-time 4 -H "X-API-Key: $API_KEY" "http://127.0.0.1:$PORT/mcp" | sed -n '1,10p' || true
+if [[ -n "$TOKEN" ]]; then
+  curl -sS -i --max-time 4 -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:$PORT/healthz" | sed -n '1,10p' || true
   echo "---"
-  curl -sS -i --max-time 4 -H "X-API-Key: $API_KEY" "http://127.0.0.1:$PORT/sse" | sed -n '1,12p' || true
+  curl -sS -i --max-time 4 -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:$PORT/sse" | sed -n '1,12p' || true
 else
-  curl -sS -i --max-time 4 "http://127.0.0.1:$PORT/mcp" | sed -n '1,10p' || true
+  curl -sS -i --max-time 4 "http://127.0.0.1:$PORT/healthz" | sed -n '1,10p' || true
   echo "---"
   curl -sS -i --max-time 4 "http://127.0.0.1:$PORT/sse" | sed -n '1,12p' || true
-  echo "(Tip: set MCP_PROXY_API_KEY env var before running for authenticated probe.)"
+  echo "(Tip: set MAC_MESSAGES_MCP_BEARER_TOKEN or MCP_PROXY_API_KEY for authenticated /sse probe.)"
 fi
 echo
 

@@ -127,6 +127,19 @@ Then point your remote client at:
 
 Override host/port with `FASTMCP_HOST` and `FASTMCP_PORT` if needed. Binding to `0.0.0.0` exposes the service on all interfaces; use `127.0.0.1` for local-only access.
 
+#### Tailscale / always-on Mac (single process, recommended)
+
+For **private** remote access (e.g. Tailscale) without `mcp-proxy` + `mcp_gateway`, use one LaunchAgent-supervised process:
+
+```bash
+./scripts/run_http_service.sh
+```
+
+That writes `.runtime/deployed.json`, loads an optional bearer from Keychain (`mac-messages-mcp/api-key`), and runs **one** Uvicorn stack (see `mac_messages_mcp/http_server.py`). Rationale: [issue #3](https://github.com/jonchui/mac_messages_mcp/issues/3).
+
+- **Auth (optional):** set `MAC_MESSAGES_MCP_BEARER_TOKEN`, or use the same Keychain entry as the legacy proxy. Remote clients: `Authorization: Bearer …` or `X-API-Key`.
+- **Legacy WAN stack:** `scripts/start_mcp_proxy.sh` + `scripts/mcp_gateway.py` remain for tunnel / multi-process setups.
+
 ### Docker Container Integration
 
 If you need to connect to `mac-messages-mcp` from a Docker container, you can either run the server with `MCP_TRANSPORT=sse` as above and use `http://host.docker.internal:8000`, or use the `mcp-proxy` package to bridge the stdio-based server to HTTP.

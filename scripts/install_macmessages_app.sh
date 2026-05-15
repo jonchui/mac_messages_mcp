@@ -38,7 +38,8 @@ PLIST
 cat > "$LAUNCHER" <<'LAUNCHER'
 #!/usr/bin/env zsh
 set -euo pipefail
-exec "$HOME/bin/start_mcp_proxy.sh"
+REPO_DIR="${MAC_MESSAGES_MCP_REPO:-$HOME/Library/Mobile Documents/com~apple~CloudDocs/code/mac_messages_mcp}"
+exec /bin/bash "$REPO_DIR/scripts/run_http_service.sh"
 LAUNCHER
 
 chmod +x "$LAUNCHER"
